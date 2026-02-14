@@ -972,6 +972,9 @@ func TestResolveDriverName(t *testing.T) {
 		{"appium android", "appium", "android", "appium"},
 		{"appium ios", "appium", "ios", "appium"},
 		{"mock platform", "", "mock", "mock"},
+		{"web default", "", "web", "cdp"},
+		{"web explicit driver", "custom", "web", "custom"},
+		{"case insensitive web", "", "Web", "cdp"},
 		{"case insensitive ios", "", "iOS", "wda"},
 		{"case insensitive appium", "Appium", "android", "appium"},
 		{"empty both", "", "", "uiautomator2"},
@@ -1970,6 +1973,44 @@ func TestFlowsUseClearState(t *testing.T) {
 // ============================================================
 // Tests for handleDeviceStartup mismatch errors
 // ============================================================
+
+func TestHandleDeviceStartup_WebPlatformSkips(t *testing.T) {
+	cfg := &RunConfig{
+		Platform:      "web",
+		StartEmulator: "something", // Should be ignored for web
+	}
+	emulatorMgr := emulator.NewManager()
+	simulatorMgr := simulator.NewManager()
+
+	err := handleDeviceStartup(cfg, emulatorMgr, simulatorMgr)
+	if err != nil {
+		t.Errorf("handleDeviceStartup for web should return nil, got: %v", err)
+	}
+}
+
+func TestDetermineExecutionMode_WebPlatform(t *testing.T) {
+	oldStdout := os.Stdout
+	os.Stdout, _ = os.Open(os.DevNull)
+	defer func() { os.Stdout = oldStdout }()
+
+	cfg := &RunConfig{
+		Platform:  "web",
+		Parallel:  2, // Should be ignored for web
+		OutputDir: t.TempDir(),
+	}
+	mgr := emulator.NewManager()
+
+	needsParallel, deviceIDs, err := determineExecutionMode(cfg, mgr, simulator.NewManager())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if needsParallel {
+		t.Error("expected needsParallel=false for web platform")
+	}
+	if len(deviceIDs) != 0 {
+		t.Errorf("expected empty deviceIDs for web, got %v", deviceIDs)
+	}
+}
 
 func TestHandleDeviceStartup_EmulatorFlagOnIOS(t *testing.T) {
 	cfg := &RunConfig{

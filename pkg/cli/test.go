@@ -186,15 +186,21 @@ func buildAppReport(driver core.Driver) report.App {
 // resolveDriverName returns the driver name for reports based on config and platform.
 func resolveDriverName(cfg *RunConfig, platform string) string {
 	driverName := strings.ToLower(cfg.Driver)
-	if driverName == "" || driverName == "uiautomator2" {
-		if strings.ToLower(platform) == "ios" {
+	switch strings.ToLower(platform) {
+	case "web":
+		if driverName == "" {
+			driverName = "cdp"
+		}
+	case "ios":
+		if driverName == "" || driverName == "uiautomator2" {
 			driverName = "wda"
-		} else {
+		}
+	case "mock":
+		driverName = "mock"
+	default: // android or empty
+		if driverName == "" || driverName == "uiautomator2" {
 			driverName = "uiautomator2"
 		}
-	}
-	if strings.ToLower(platform) == "mock" {
-		driverName = "mock"
 	}
 	return driverName
 }
@@ -290,6 +296,11 @@ func handleEmulatorStartup(cfg *RunConfig, mgr *emulator.Manager) error {
 // Also catches mismatched flags (e.g., --start-emulator with --platform ios).
 func handleDeviceStartup(cfg *RunConfig, emulatorMgr *emulator.Manager, simulatorMgr *simulator.Manager) error {
 	platform := strings.ToLower(cfg.Platform)
+
+	// Web platform doesn't need device startup
+	if platform == "web" {
+		return nil
+	}
 
 	// Catch mismatched flags and suggest the right one
 	if platform == "ios" && cfg.StartEmulator != "" {
@@ -972,6 +983,11 @@ func flowsUseClearState(flows []flow.Flow) bool {
 // If --parallel N is specified with --auto-start-emulator, this will start additional
 // emulators to reach N total devices.
 func determineExecutionMode(cfg *RunConfig, emulatorMgr *emulator.Manager, simulatorMgr *simulator.Manager) (needsParallel bool, deviceIDs []string, err error) {
+	// Web platform runs in a single browser — no device management needed
+	if strings.ToLower(cfg.Platform) == "web" {
+		return false, nil, nil
+	}
+
 	needsParallel = cfg.Parallel > 0 || len(cfg.Devices) > 1
 
 	if needsParallel {

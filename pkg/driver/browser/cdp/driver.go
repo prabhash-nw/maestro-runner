@@ -236,7 +236,7 @@ func (d *Driver) Execute(step flow.Step) *core.CommandResult {
 	case *flow.DismissAlertStep:
 		result = d.dismissAlert(s)
 
-	// Unsupported
+	// Unsupported — mobile-only or not applicable to web
 	case *flow.SetAirplaneModeStep, *flow.ToggleAirplaneModeStep:
 		result = unsupportedResult("airplane mode is not supported on web platform")
 	case *flow.TravelStep:
@@ -247,6 +247,16 @@ func (d *Driver) Execute(step flow.Step) *core.CommandResult {
 		result = unsupportedResult("startRecording is not supported on web platform")
 	case *flow.StopRecordingStep:
 		result = unsupportedResult("stopRecording is not supported on web platform")
+	case *flow.ClearKeychainStep:
+		result = unsupportedResult("clearKeychain is not supported on web platform")
+	case *flow.SetPermissionsStep:
+		result = unsupportedResult("setPermissions is not supported on web platform")
+	case *flow.AssertNoDefectsWithAIStep:
+		result = unsupportedResult("assertNoDefectsWithAI is not supported on web platform")
+	case *flow.AssertWithAIStep:
+		result = unsupportedResult("assertWithAI is not supported on web platform")
+	case *flow.ExtractTextWithAIStep:
+		result = unsupportedResult("extractTextWithAI is not supported on web platform")
 
 	default:
 		result = &core.CommandResult{

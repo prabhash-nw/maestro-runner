@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -685,6 +686,11 @@ func TestUnsupportedCommands(t *testing.T) {
 		{"addMedia", &flow.AddMediaStep{}},
 		{"startRecording", &flow.StartRecordingStep{}},
 		{"stopRecording", &flow.StopRecordingStep{}},
+		{"clearKeychain", &flow.ClearKeychainStep{}},
+		{"setPermissions", &flow.SetPermissionsStep{}},
+		{"assertNoDefectsWithAI", &flow.AssertNoDefectsWithAIStep{}},
+		{"assertWithAI", &flow.AssertWithAIStep{}},
+		{"extractTextWithAI", &flow.ExtractTextWithAIStep{}},
 	}
 
 	for _, tt := range tests {
@@ -2602,5 +2608,245 @@ func TestFindByRoleNotFound(t *testing.T) {
 	})
 	if result.Success {
 		t.Error("find by nonexistent role should fail")
+	}
+}
+
+// --- Tests for findByCSSWithNth via attribute selectors ---
+
+func TestFindByCSSWithNthViaAttribute(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<!DOCTYPE html><html><body>
+			<input type="text" placeholder="Enter text" value="first">
+			<input type="text" placeholder="Enter text" value="second">
+			<input type="text" placeholder="Enter text" value="third">
+			<input type="text" placeholder="Enter text" disabled value="fourth">
+		</body></html>`)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// nth=1 via attribute selector — covers findByCSSWithNth nth branch
+	result := d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{Placeholder: "Enter text", Nth: 1},
+	})
+	if !result.Success {
+		t.Errorf("placeholder with nth=1 should succeed: %s", result.Message)
+	}
+
+	// nth=2 to get the third element
+	result = d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{Placeholder: "Enter text", Nth: 2},
+	})
+	if !result.Success {
+		t.Errorf("placeholder with nth=2 should succeed: %s", result.Message)
+	}
+
+	// nth out of range — covers "nth=%d but only %d elements found"
+	result = d.Execute(&flow.AssertVisibleStep{
+		BaseStep: flow.BaseStep{Optional: true, TimeoutMs: 1000},
+		Selector: flow.Selector{Placeholder: "Enter text", Nth: 10},
+	})
+	if result.Success {
+		t.Error("placeholder with nth=10 should fail")
+	}
+
+	// nth=3 targets the disabled input, with enabled=true — covers state filter mismatch in nth branch
+	tr := true
+	result = d.Execute(&flow.AssertVisibleStep{
+		BaseStep: flow.BaseStep{Optional: true, TimeoutMs: 1000},
+		Selector: flow.Selector{Placeholder: "Enter text", Nth: 3, Enabled: &tr},
+	})
+	if result.Success {
+		t.Error("placeholder nth=3 with enabled=true should fail (4th input is disabled)")
+	}
+}
+
+func TestFindByHrefWithNth(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<!DOCTYPE html><html><body>
+			<a href="/page">Link One</a>
+			<a href="/page">Link Two</a>
+			<a href="/page">Link Three</a>
+		</body></html>`)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// nth=1 via href exact match — covers findByCSSWithNth nth path through findByHref
+	result := d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{Href: "/page", Nth: 1},
+	})
+	if !result.Success {
+		t.Errorf("href with nth=1 should succeed: %s", result.Message)
+	}
+}
+
+// --- Tests for resolveAXNodes with nth and state filters ---
+
+func TestResolveAXNodesWithNth(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	d := newSelectorTestDriver(t, ts)
+	defer d.Close()
+
+	// textContains "Welcome" matches two paragraphs, use nth=1 to get the second
+	result := d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{TextContains: "Welcome", Nth: 1},
+	})
+	if !result.Success {
+		t.Errorf("textContains with nth=1 should succeed: %s", result.Message)
+	}
+
+	// nth out of range via resolveAXNodes
+	result = d.Execute(&flow.AssertVisibleStep{
+		BaseStep: flow.BaseStep{Optional: true, TimeoutMs: 1000},
+		Selector: flow.Selector{TextContains: "Welcome", Nth: 10},
+	})
+	if result.Success {
+		t.Error("textContains with nth=10 should fail")
+	}
+}
+
+func TestTextRegexWithNth(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	d := newSelectorTestDriver(t, ts)
+	defer d.Close()
+
+	// textRegex matching "Welcome" with nth=1 — resolveAXNodes nth path for textRegex
+	result := d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{TextRegex: `Welcome`, Nth: 1},
+	})
+	if !result.Success {
+		t.Errorf("textRegex with nth=1 should succeed: %s", result.Message)
+	}
+}
+
+func TestResolveAXNodesStateFilter(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<!DOCTYPE html><html><body>
+			<button>Action Button</button>
+			<button disabled>Action Button</button>
+		</body></html>`)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	tr := true
+
+	// textContains with enabled=true state filter — resolveAXNodes should skip disabled match
+	result := d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{TextContains: "Action", Enabled: &tr},
+	})
+	if !result.Success {
+		t.Errorf("textContains with enabled=true should find enabled button: %s", result.Message)
+	}
+
+	// Disabled button should only be found with enabled=false
+	fa := false
+	result = d.Execute(&flow.AssertVisibleStep{
+		Selector: flow.Selector{TextContains: "Action", Enabled: &fa},
+	})
+	if !result.Success {
+		t.Errorf("textContains with enabled=false should find disabled button: %s", result.Message)
+	}
+}
+
+// --- Direct tests for JS fallback functions ---
+
+func TestFindByJSTextContainsDirect(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// Success: find existing text via JS textContent contains
+	_, info, err := d.findByJSTextContains("paragraph text", flow.Selector{TextContains: "paragraph text"})
+	if err != nil {
+		t.Errorf("findByJSTextContains should succeed: %v", err)
+	}
+	if info == nil {
+		t.Error("should return element info")
+	}
+
+	// Not found — covers "JS textContains failed" error path
+	_, _, err = d.findByJSTextContains("XYZNONEXISTENT999", flow.Selector{TextContains: "XYZNONEXISTENT999"})
+	if err == nil {
+		t.Error("findByJSTextContains should fail for nonexistent text")
+	}
+
+	// State filter mismatch — covers "state filters don't match" path
+	fa := false
+	_, _, err = d.findByJSTextContains("Click Me", flow.Selector{TextContains: "Click Me", Enabled: &fa})
+	if err == nil {
+		t.Error("findByJSTextContains should fail when state filter doesn't match")
+	}
+}
+
+func TestFindByJSTextRegexDirect(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// Success: find existing text via JS regex
+	re := regexp.MustCompile(`paragraph`)
+	_, info, err := d.findByJSTextRegex(`paragraph`, re, flow.Selector{TextRegex: `paragraph`})
+	if err != nil {
+		t.Errorf("findByJSTextRegex should succeed: %v", err)
+	}
+	if info == nil {
+		t.Error("should return element info")
+	}
+
+	// Not found — covers "JS textRegex failed" error path
+	reNone := regexp.MustCompile(`^XYZNONEXISTENT\d+$`)
+	_, _, err = d.findByJSTextRegex(`^XYZNONEXISTENT\d+$`, reNone, flow.Selector{TextRegex: `^XYZNONEXISTENT\d+$`})
+	if err == nil {
+		t.Error("findByJSTextRegex should fail for nonexistent pattern")
+	}
+
+	// State filter mismatch — covers "state filters don't match" path
+	fa := false
+	reClick := regexp.MustCompile(`Click Me`)
+	_, _, err = d.findByJSTextRegex(`Click Me`, reClick, flow.Selector{TextRegex: `Click Me`, Enabled: &fa})
+	if err == nil {
+		t.Error("findByJSTextRegex should fail when state filter doesn't match")
+	}
+}
+
+// --- Test findByCSSWithNth state filter in non-nth path ---
+
+func TestFindByCSSWithNthStateFilterNoNth(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// State filter mismatch via attribute selector (no nth) — covers non-nth state filter path
+	fa := false
+	_, _, err := d.findByAttribute("id", "btn", flow.Selector{Name: "btn", Enabled: &fa})
+	if err == nil {
+		t.Error("findByAttribute should fail when state filter doesn't match")
 	}
 }
