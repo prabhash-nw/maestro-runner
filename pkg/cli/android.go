@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/devicelab-dev/maestro-runner/pkg/core"
@@ -171,15 +172,42 @@ func createUIAutomator2Driver(cfg *RunConfig, dev *device.AndroidDevice, info de
 		appVersion = dev.GetAppVersion(cfg.AppID)
 	}
 
-	// 6. Create driver
+	// 6. Get screen size
+	var screenW, screenH int
+	devInfo, err := client.GetDeviceInfo()
+	if err == nil && devInfo.RealDisplaySize != "" {
+		parts := strings.Split(devInfo.RealDisplaySize, "x")
+		if len(parts) == 2 {
+			screenW, _ = strconv.Atoi(parts[0])
+			screenH, _ = strconv.Atoi(parts[1])
+		}
+	}
+	if screenW == 0 || screenH == 0 {
+		// Fallback: wm size
+		if output, err := dev.Shell("wm size"); err == nil {
+			output = strings.TrimSpace(output)
+			if idx := strings.LastIndex(output, ":"); idx != -1 {
+				output = strings.TrimSpace(output[idx+1:])
+			}
+			parts := strings.Split(output, "x")
+			if len(parts) == 2 {
+				screenW, _ = strconv.Atoi(strings.TrimSpace(parts[0]))
+				screenH, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
+			}
+		}
+	}
+
+	// 7. Create driver
 	platformInfo := &core.PlatformInfo{
-		Platform:    "android",
-		DeviceID:    info.Serial,
-		DeviceName:  fmt.Sprintf("%s %s", info.Brand, info.Model),
-		OSVersion:   info.SDK,
-		IsSimulator: info.IsEmulator,
-		AppID:       cfg.AppID,
-		AppVersion:  appVersion,
+		Platform:     "android",
+		DeviceID:     info.Serial,
+		DeviceName:   fmt.Sprintf("%s %s", info.Brand, info.Model),
+		OSVersion:    info.SDK,
+		IsSimulator:  info.IsEmulator,
+		ScreenWidth:  screenW,
+		ScreenHeight: screenH,
+		AppID:        cfg.AppID,
+		AppVersion:   appVersion,
 	}
 	driver := uia2driver.New(client, platformInfo, dev)
 

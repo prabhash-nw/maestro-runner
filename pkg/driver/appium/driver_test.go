@@ -265,6 +265,54 @@ func TestExecuteAppiumTapOnPointWithPercentage(t *testing.T) {
 	}
 }
 
+// TestExecuteTapOnPointAbsolutePixels tests tap with absolute pixel coordinates
+func TestExecuteAppiumTapOnPointAbsolutePixels(t *testing.T) {
+	server := mockAppiumServerForDriver()
+	defer server.Close()
+	driver := createTestAppiumDriver(server)
+
+	step := &flow.TapOnPointStep{
+		Point: "123, 456",
+	}
+	result := driver.Execute(step)
+
+	if !result.Success {
+		t.Errorf("Expected success, got error: %v", result.Error)
+	}
+}
+
+// TestExecuteTapOnWithAbsolutePixelPoint tests tapOn with absolute pixel point and no selector
+func TestExecuteAppiumTapOnWithAbsolutePixelPoint(t *testing.T) {
+	server := mockAppiumServerForDriver()
+	defer server.Close()
+	driver := createTestAppiumDriver(server)
+
+	step := &flow.TapOnStep{
+		Point: "200, 300",
+	}
+	result := driver.Execute(step)
+
+	if !result.Success {
+		t.Errorf("Expected success, got error: %v", result.Error)
+	}
+}
+
+// TestExecuteTapOnWithPercentagePoint tests tapOn with percentage point and no selector
+func TestExecuteAppiumTapOnWithPercentagePoint(t *testing.T) {
+	server := mockAppiumServerForDriver()
+	defer server.Close()
+	driver := createTestAppiumDriver(server)
+
+	step := &flow.TapOnStep{
+		Point: "50%, 50%",
+	}
+	result := driver.Execute(step)
+
+	if !result.Success {
+		t.Errorf("Expected success, got error: %v", result.Error)
+	}
+}
+
 // TestExecuteSwipe tests swipe
 func TestExecuteAppiumSwipe(t *testing.T) {
 	server := mockAppiumServerForDriver()

@@ -3,8 +3,6 @@ package uiautomator2
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,9 +17,9 @@ import (
 // ============================================================================
 
 func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
-	// Check if using percentage-based Point WITHOUT selector (screen-relative tap)
+	// Check if using Point WITHOUT selector (screen-relative tap)
 	if step.Point != "" && step.Selector.IsEmpty() {
-		return d.tapOnPointWithPercentage(step.Point)
+		return d.tapOnPointWithCoords(step.Point)
 	}
 
 	elem, info, err := d.findElementForTap(step.Selector, step.IsOptional(), step.TimeoutMs)
@@ -34,12 +32,12 @@ func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
 
 	// If Point is specified WITH selector, tap at relative position within element bounds
 	if step.Point != "" && info.Bounds.Width > 0 {
-		xPct, yPct, parseErr := parsePercentageCoords(step.Point)
+		x, y, parseErr := core.ParsePointCoords(step.Point, info.Bounds.Width, info.Bounds.Height)
 		if parseErr != nil {
 			return errorResult(parseErr, fmt.Sprintf("Invalid point coordinates: %v", parseErr))
 		}
-		x := info.Bounds.X + int(float64(info.Bounds.Width)*xPct)
-		y := info.Bounds.Y + int(float64(info.Bounds.Height)*yPct)
+		x += info.Bounds.X
+		y += info.Bounds.Y
 		if err := d.client.Click(x, y); err != nil {
 			return errorResult(err, fmt.Sprintf("Failed to tap at relative point: %v", err))
 		}
@@ -61,26 +59,17 @@ func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
 	return successResult("Tapped on element", info)
 }
 
-// tapOnPointWithPercentage handles percentage-based tap (e.g., "85%, 50%")
-func (d *Driver) tapOnPointWithPercentage(point string) *core.CommandResult {
-	if d.device == nil {
-		return errorResult(fmt.Errorf("device not configured"), "tapOn with percentage point requires device access")
-	}
-
-	// Get screen dimensions
-	width, height, err := d.getScreenSize()
+// tapOnPointWithCoords handles point-based tap with either percentage ("85%, 50%") or absolute ("123, 456") coordinates.
+func (d *Driver) tapOnPointWithCoords(point string) *core.CommandResult {
+	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to get screen size: %v", err))
 	}
 
-	// Parse percentage coordinates
-	xPct, yPct, err := parsePercentageCoords(point)
+	x, y, err := core.ParsePointCoords(point, width, height)
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Invalid point coordinates: %v", err))
 	}
-
-	x := int(float64(width) * xPct)
-	y := int(float64(height) * yPct)
 
 	if err := d.client.Click(x, y); err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to tap at point: %v", err))
@@ -136,26 +125,17 @@ func (d *Driver) longPressOn(step *flow.LongPressOnStep) *core.CommandResult {
 func (d *Driver) tapOnPoint(step *flow.TapOnPointStep) *core.CommandResult {
 	x, y := step.X, step.Y
 
-	// Check if using percentage-based Point (e.g., "85%, 50%")
+	// Check if using Point field (e.g., "85%, 50%" or "123, 456")
 	if step.Point != "" {
-		if d.device == nil {
-			return errorResult(fmt.Errorf("device not configured"), "tapOn with percentage point requires device access")
-		}
-
-		// Get screen dimensions
-		width, height, err := d.getScreenSize()
+		width, height, err := d.screenSize()
 		if err != nil {
 			return errorResult(err, fmt.Sprintf("Failed to get screen size: %v", err))
 		}
 
-		// Parse percentage coordinates
-		xPct, yPct, err := parsePercentageCoords(step.Point)
+		x, y, err = core.ParsePointCoords(step.Point, width, height)
 		if err != nil {
 			return errorResult(err, fmt.Sprintf("Invalid point coordinates: %v", err))
 		}
-
-		x = int(float64(width) * xPct)
-		y = int(float64(height) * yPct)
 	}
 
 	if x == 0 && y == 0 {
@@ -394,9 +374,9 @@ func (d *Driver) scroll(step *flow.ScrollStep) *core.CommandResult {
 	uiaDir := invertScrollDirection(direction)
 
 	// Get screen size for dynamic scroll area
-	width, height := 1080, 1920 // defaults
-	if w, h, err := d.getScreenSize(); err == nil {
-		width, height = w, h
+	width, height, err := d.screenSize()
+	if err != nil {
+		return errorResult(err, "Failed to get screen size")
 	}
 
 	// Use most of screen for scroll area (leave margins)
@@ -421,9 +401,9 @@ func (d *Driver) scrollUntilVisible(step *flow.ScrollUntilVisibleStep) *core.Com
 	uiaDir := invertScrollDirection(direction)
 
 	// Get screen size for dynamic scroll area
-	width, height := 1080, 1920 // defaults
-	if w, h, err := d.getScreenSize(); err == nil {
-		width, height = w, h
+	width, height, err := d.screenSize()
+	if err != nil {
+		return errorResult(err, "Failed to get screen size")
 	}
 
 	// Use most of screen for scroll area (leave margins)
@@ -487,9 +467,9 @@ func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
 	}
 
 	// Get screen size
-	width, height := 1080, 1920 // defaults
-	if w, h, err := d.getScreenSize(); err == nil {
-		width, height = w, h
+	width, height, err := d.screenSize()
+	if err != nil {
+		return errorResult(err, "Failed to get screen size")
 	}
 
 	// No selector specified - try to find a scrollable element
@@ -622,7 +602,7 @@ func (d *Driver) swipeWithCoordinates(start, end string, durationMs int) *core.C
 	}
 
 	// Get screen dimensions
-	width, height, err := d.getScreenSize()
+	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to get screen size: %v", err))
 	}
@@ -668,73 +648,9 @@ func (d *Driver) swipeWithAbsoluteCoords(startX, startY, endX, endY, durationMs 
 	return successResult(fmt.Sprintf("Swiped from (%d,%d) to (%d,%d)", startX, startY, endX, endY), nil)
 }
 
-// getScreenSize returns the device screen dimensions (width, height)
-func (d *Driver) getScreenSize() (int, int, error) {
-	// Try to get from device info via UIAutomator2
-	if d.client != nil {
-		info, err := d.client.GetDeviceInfo()
-		if err == nil && info.RealDisplaySize != "" {
-			// Parse "1080x2400" format
-			parts := strings.Split(info.RealDisplaySize, "x")
-			if len(parts) == 2 {
-				width, err1 := strconv.Atoi(parts[0])
-				height, err2 := strconv.Atoi(parts[1])
-				if err1 == nil && err2 == nil {
-					return width, height, nil
-				}
-			}
-		}
-	}
-
-	// Fallback: use wm size command
-	if d.device == nil {
-		return 0, 0, fmt.Errorf("no device connection available to get screen size")
-	}
-	output, err := d.device.Shell("wm size")
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get screen size: %w", err)
-	}
-
-	// Parse "Physical size: 1080x2400" format
-	output = strings.TrimSpace(output)
-	if idx := strings.LastIndex(output, ":"); idx != -1 {
-		output = strings.TrimSpace(output[idx+1:])
-	}
-	parts := strings.Split(output, "x")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("unexpected wm size output: %s", output)
-	}
-
-	width, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-	height, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if err1 != nil || err2 != nil {
-		return 0, 0, fmt.Errorf("failed to parse screen size: %s", output)
-	}
-
-	return width, height, nil
-}
-
 // parsePercentageCoords parses "x%, y%" format into decimal fractions (0.0-1.0)
 func parsePercentageCoords(coord string) (float64, float64, error) {
-	parts := strings.Split(coord, ",")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("expected 'x%%, y%%' format, got: %s", coord)
-	}
-
-	xStr := strings.TrimSpace(strings.TrimSuffix(parts[0], "%"))
-	yStr := strings.TrimSpace(strings.TrimSuffix(parts[1], "%"))
-
-	xPct, err := strconv.ParseFloat(xStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid x percentage: %s", parts[0])
-	}
-
-	yPct, err := strconv.ParseFloat(yStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid y percentage: %s", parts[1])
-	}
-
-	return xPct / 100.0, yPct / 100.0, nil
+	return core.ParsePercentageCoords(coord)
 }
 
 // ============================================================================
@@ -1604,32 +1520,17 @@ func mapKeyCode(key string) int {
 }
 
 func randomString(length int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
-	}
-	return string(b)
+	return core.RandomString(length)
 }
 
 func randomEmail() string {
-	user := randomString(8)
-	domains := []string{"example.com", "test.com", "mail.com"}
-	domain := domains[rand.Intn(len(domains))]
-	return user + "@" + domain
+	return core.RandomEmail()
 }
 
 func randomNumber(length int) string {
-	const digits = "0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = digits[rand.Intn(len(digits))]
-	}
-	return string(b)
+	return core.RandomNumber(length)
 }
 
 func randomPersonName() string {
-	firstNames := []string{"John", "Jane", "Michael", "Emily", "David", "Sarah", "James", "Emma", "Robert", "Olivia"}
-	lastNames := []string{"Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"}
-	return firstNames[rand.Intn(len(firstNames))] + " " + lastNames[rand.Intn(len(lastNames))]
+	return core.RandomPersonName()
 }

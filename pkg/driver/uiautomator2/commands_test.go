@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/devicelab-dev/maestro-runner/pkg/core"
 	"github.com/devicelab-dev/maestro-runner/pkg/flow"
 	"github.com/devicelab-dev/maestro-runner/pkg/uiautomator2"
 )
@@ -1303,7 +1304,7 @@ func TestScrollAllDirections(t *testing.T) {
 	for _, dir := range directions {
 		t.Run(dir, func(t *testing.T) {
 			client := &MockUIA2Client{}
-			driver := New(client, nil, nil)
+			driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 			step := &flow.ScrollStep{Direction: dir}
 			result := driver.Execute(step)
@@ -1320,7 +1321,7 @@ func TestScrollAllDirections(t *testing.T) {
 
 func TestScrollEmptyDirection(t *testing.T) {
 	client := &MockUIA2Client{}
-	driver := New(client, nil, nil)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 	step := &flow.ScrollStep{Direction: ""}
 	result := driver.Execute(step)
@@ -1365,7 +1366,7 @@ func TestScrollUntilVisibleDefaultDirection(t *testing.T) {
 	defer server.Close()
 
 	client := newMockHTTPClient(server.URL)
-	driver := New(client.Client, nil, nil)
+	driver := New(client.Client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 	step := &flow.ScrollUntilVisibleStep{
 		Element:   flow.Selector{Text: "Target"},
@@ -1412,7 +1413,7 @@ func TestScrollUntilVisibleUpDirection(t *testing.T) {
 	defer server.Close()
 
 	client := newMockHTTPClient(server.URL)
-	driver := New(client.Client, nil, nil)
+	driver := New(client.Client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 	step := &flow.ScrollUntilVisibleStep{
 		Element:   flow.Selector{Text: "Target"},
@@ -1908,15 +1909,15 @@ func TestTakeScreenshotViaMethod(t *testing.T) {
 }
 
 // ============================================================================
-// tapOnPointWithPercentage Tests
+// tapOnPointWithCoords Tests
 // ============================================================================
 
 func TestTapOnPointWithPercentageSuccess(t *testing.T) {
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if !result.Success {
 		t.Errorf("expected success, got error: %v", result.Error)
@@ -1934,10 +1935,10 @@ func TestTapOnPointWithPercentageSuccess(t *testing.T) {
 func TestTapOnPointWithPercentageCorners(t *testing.T) {
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	// Top-left corner: 0%, 0%
-	result := driver.tapOnPointWithPercentage("0%, 0%")
+	result := driver.tapOnPointWithCoords("0%, 0%")
 
 	if !result.Success {
 		t.Errorf("expected success, got error: %v", result.Error)
@@ -1951,15 +1952,15 @@ func TestTapOnPointWithPercentageCorners(t *testing.T) {
 }
 
 func TestTapOnPointWithPercentageNoDevice(t *testing.T) {
-	driver := &Driver{device: nil}
+	driver := &Driver{}
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
 		t.Error("expected failure when device is nil")
 	}
-	if !strings.Contains(result.Message, "device") {
-		t.Errorf("expected device-related error message, got: %s", result.Message)
+	if !strings.Contains(result.Message, "screen") {
+		t.Errorf("expected screen-related error message, got: %s", result.Message)
 	}
 }
 
@@ -1968,7 +1969,7 @@ func TestTapOnPointWithPercentageInvalidCoords(t *testing.T) {
 	shell := &MockShellExecutor{}
 	driver := New(client, nil, shell)
 
-	result := driver.tapOnPointWithPercentage("invalid")
+	result := driver.tapOnPointWithCoords("invalid")
 
 	if result.Success {
 		t.Error("expected failure for invalid coordinates")
@@ -1980,10 +1981,29 @@ func TestTapOnPointWithPercentageClickError(t *testing.T) {
 	shell := &MockShellExecutor{}
 	driver := New(client, nil, shell)
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
 		t.Error("expected failure when click returns error")
+	}
+}
+
+func TestTapOnPointWithCoordsAbsolutePixels(t *testing.T) {
+	client := &MockUIA2Client{}
+	shell := &MockShellExecutor{}
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
+
+	result := driver.tapOnPointWithCoords("123, 456")
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %v", result.Error)
+	}
+	if len(client.clickCalls) != 1 {
+		t.Fatalf("expected 1 click call, got %d", len(client.clickCalls))
+	}
+	// Absolute pixels: should tap at exactly (123, 456)
+	if client.clickCalls[0].X != 123 || client.clickCalls[0].Y != 456 {
+		t.Errorf("expected click at (123, 456), got (%d, %d)", client.clickCalls[0].X, client.clickCalls[0].Y)
 	}
 }
 
@@ -1991,11 +2011,31 @@ func TestTapOnPointWithPercentageClickError(t *testing.T) {
 // tapOnPoint Additional Tests
 // ============================================================================
 
+func TestTapOnPointAbsolutePixels(t *testing.T) {
+	client := &MockUIA2Client{}
+	shell := &MockShellExecutor{}
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
+
+	step := &flow.TapOnPointStep{Point: "200, 300"}
+	result := driver.tapOnPoint(step)
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %v", result.Error)
+	}
+	if len(client.clickCalls) != 1 {
+		t.Fatalf("expected 1 click call, got %d", len(client.clickCalls))
+	}
+	// Absolute pixels: should tap at exactly (200, 300)
+	if client.clickCalls[0].X != 200 || client.clickCalls[0].Y != 300 {
+		t.Errorf("expected click at (200, 300), got (%d, %d)", client.clickCalls[0].X, client.clickCalls[0].Y)
+	}
+}
+
 func TestTapOnPointWithPercentagePoint(t *testing.T) {
 	// Test tapOnPoint with a percentage-based Point string
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	step := &flow.TapOnPointStep{Point: "85%, 15%"}
 	result := driver.tapOnPoint(step)
@@ -2058,7 +2098,7 @@ func TestTapOnPointZeroCoords(t *testing.T) {
 func TestSwipeWithCoordinatesSuccess(t *testing.T) {
 	shell := &MockShellExecutor{}
 	client := &MockUIA2Client{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	result := driver.swipeWithCoordinates("50%, 80%", "50%, 20%", 400)
 
@@ -2113,7 +2153,7 @@ func TestSwipeWithCoordinatesInvalidEnd(t *testing.T) {
 func TestSwipeWithCoordinatesDefaultDuration(t *testing.T) {
 	shell := &MockShellExecutor{}
 	client := &MockUIA2Client{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	// Duration 0 should default to 300
 	result := driver.swipeWithCoordinates("50%, 80%", "50%, 20%", 0)
@@ -2136,7 +2176,7 @@ func TestSwipeWithCoordinatesDefaultDuration(t *testing.T) {
 func TestSwipeWithStartEndPercentages(t *testing.T) {
 	shell := &MockShellExecutor{}
 	client := &MockUIA2Client{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	step := &flow.SwipeStep{Start: "30%, 70%", End: "70%, 30%", Duration: 500}
 	result := driver.swipe(step)
@@ -2178,7 +2218,7 @@ func TestSwipeWithAbsoluteCoords(t *testing.T) {
 func TestSwipeEmptyDirectionDefaultsToUp(t *testing.T) {
 	shell := &MockShellExecutor{}
 	client := &MockUIA2Client{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
 	step := &flow.SwipeStep{Direction: ""}
 	result := driver.swipe(step)
@@ -2519,15 +2559,14 @@ func TestApplyPermissionsDeny(t *testing.T) {
 }
 
 // ============================================================================
-// getScreenSize Tests
+// screenSize Tests
 // ============================================================================
 
-func TestGetScreenSizeViaDeviceInfo(t *testing.T) {
-	// MockUIA2Client returns "1080x2400" from GetDeviceInfo
-	client := &MockUIA2Client{}
-	driver := &Driver{client: client}
+func TestScreenSizeCached(t *testing.T) {
+	info := &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}
+	driver := &Driver{info: info}
 
-	w, h, err := driver.getScreenSize()
+	w, h, err := driver.screenSize()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2536,101 +2575,22 @@ func TestGetScreenSizeViaDeviceInfo(t *testing.T) {
 	}
 }
 
-func TestGetScreenSizeViaWmSize(t *testing.T) {
-	// Use HTTP mock that returns bad display size, forcing wm size fallback
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": ""},
-			})
-		},
-	})
-	defer server.Close()
-
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{response: "Physical size: 720x1280"}
-	driver := New(client.Client, nil, shell)
-
-	w, h, err := driver.getScreenSize()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if w != 720 || h != 1280 {
-		t.Errorf("expected 720x1280, got %dx%d", w, h)
-	}
-}
-
-func TestGetScreenSizeWmSizeNoDevice(t *testing.T) {
-	// No client, no device - should return error
+func TestScreenSizeNotAvailable(t *testing.T) {
 	driver := &Driver{}
 
-	_, _, err := driver.getScreenSize()
-
+	_, _, err := driver.screenSize()
 	if err == nil {
-		t.Error("expected error when no client and no device")
+		t.Error("expected error when screen size not set")
 	}
 }
 
-func TestGetScreenSizeWmSizeShellError(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": ""},
-			})
-		},
-	})
-	defer server.Close()
+func TestScreenSizeZeroDimensions(t *testing.T) {
+	info := &core.PlatformInfo{ScreenWidth: 0, ScreenHeight: 0}
+	driver := &Driver{info: info}
 
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{err: errors.New("shell failed")}
-	driver := New(client.Client, nil, shell)
-
-	_, _, err := driver.getScreenSize()
-
+	_, _, err := driver.screenSize()
 	if err == nil {
-		t.Error("expected error when shell fails")
-	}
-}
-
-func TestGetScreenSizeWmSizeBadFormat(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": ""},
-			})
-		},
-	})
-	defer server.Close()
-
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{response: "unexpected output"}
-	driver := New(client.Client, nil, shell)
-
-	_, _, err := driver.getScreenSize()
-
-	if err == nil {
-		t.Error("expected error for bad wm size output")
-	}
-}
-
-func TestGetScreenSizeWmSizeNonNumeric(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": ""},
-			})
-		},
-	})
-	defer server.Close()
-
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{response: "Physical size: abcxdef"}
-	driver := New(client.Client, nil, shell)
-
-	_, _, err := driver.getScreenSize()
-
-	if err == nil {
-		t.Error("expected error for non-numeric wm size values")
+		t.Error("expected error when screen dimensions are zero")
 	}
 }
 
@@ -3113,7 +3073,7 @@ func TestGetAllPermissionsNotEmpty(t *testing.T) {
 func TestTapOnWithPercentagePoint(t *testing.T) {
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
 	step := &flow.TapOnStep{Point: "50%, 50%"}
 	result := driver.tapOn(step)
@@ -3121,7 +3081,7 @@ func TestTapOnWithPercentagePoint(t *testing.T) {
 	if !result.Success {
 		t.Errorf("expected success, got error: %v", result.Error)
 	}
-	// Should have called tapOnPointWithPercentage -> Click(540, 1200)
+	// Should have called tapOnPointWithCoords -> Click(540, 1200)
 	if len(client.clickCalls) != 1 {
 		t.Fatalf("expected 1 click call, got %d", len(client.clickCalls))
 	}
@@ -3130,56 +3090,23 @@ func TestTapOnWithPercentagePoint(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// getScreenSize via DeviceInfo with bad format Tests
-// ============================================================================
+func TestTapOnWithAbsolutePixelPoint(t *testing.T) {
+	client := &MockUIA2Client{}
+	shell := &MockShellExecutor{}
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}, shell)
 
-func TestGetScreenSizeDeviceInfoBadFormat(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			// Return a malformed display size (missing "x" separator)
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": "1080-2400"},
-			})
-		},
-	})
-	defer server.Close()
+	step := &flow.TapOnStep{Point: "123, 456"}
+	result := driver.tapOn(step)
 
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{response: "Physical size: 1080x2400"}
-	driver := New(client.Client, nil, shell)
-
-	w, h, err := driver.getScreenSize()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !result.Success {
+		t.Errorf("expected success, got error: %v", result.Error)
 	}
-	// Falls back to wm size
-	if w != 1080 || h != 2400 {
-		t.Errorf("expected 1080x2400, got %dx%d", w, h)
+	// Absolute pixels: should tap at exactly (123, 456)
+	if len(client.clickCalls) != 1 {
+		t.Fatalf("expected 1 click call, got %d", len(client.clickCalls))
 	}
-}
-
-func TestGetScreenSizeDeviceInfoNonNumeric(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, map[string]interface{}{
-				"value": map[string]interface{}{"realDisplaySize": "ABCxDEF"},
-			})
-		},
-	})
-	defer server.Close()
-
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{response: "Physical size: 720x1280"}
-	driver := New(client.Client, nil, shell)
-
-	w, h, err := driver.getScreenSize()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Falls back to wm size
-	if w != 720 || h != 1280 {
-		t.Errorf("expected 720x1280, got %dx%d", w, h)
+	if client.clickCalls[0].X != 123 || client.clickCalls[0].Y != 456 {
+		t.Errorf("expected click at (123, 456), got (%d, %d)", client.clickCalls[0].X, client.clickCalls[0].Y)
 	}
 }
 
@@ -3283,51 +3210,32 @@ func TestSetWaitForIdleTimeoutMock(t *testing.T) {
 }
 
 // ============================================================================
-// swipeWithCoordinates getScreenSize error Tests
+// swipeWithCoordinates screen size error Tests
 // ============================================================================
 
 func TestSwipeWithCoordinatesScreenSizeError(t *testing.T) {
-	// Device exists but GetDeviceInfo fails and shell also fails
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJSON(w, map[string]interface{}{"value": "error"})
-		},
-	})
-	defer server.Close()
-
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{err: errors.New("wm failed")}
-	driver := New(client.Client, nil, shell)
+	// No screen size in PlatformInfo
+	driver := &Driver{device: &MockShellExecutor{}}
 
 	result := driver.swipeWithCoordinates("50%, 80%", "50%, 20%", 400)
 
 	if result.Success {
-		t.Error("expected failure when screen size cannot be determined")
+		t.Error("expected failure when screen size not available")
 	}
 }
 
 // ============================================================================
-// tapOnPointWithPercentage getScreenSize error Tests
+// tapOnPointWithCoords screen size error Tests
 // ============================================================================
 
 func TestTapOnPointWithPercentageScreenSizeError(t *testing.T) {
-	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
-		"GET /appium/device/info": func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			writeJSON(w, map[string]interface{}{"value": "error"})
-		},
-	})
-	defer server.Close()
+	// No screen size in PlatformInfo
+	driver := &Driver{}
 
-	client := newMockHTTPClient(server.URL)
-	shell := &MockShellExecutor{err: errors.New("wm failed")}
-	driver := New(client.Client, nil, shell)
-
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
-		t.Error("expected failure when screen size cannot be determined")
+		t.Error("expected failure when screen size not available")
 	}
 }
 

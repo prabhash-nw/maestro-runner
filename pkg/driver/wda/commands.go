@@ -3,9 +3,7 @@ package wda
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,9 +18,9 @@ import (
 // Tap commands
 
 func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
-	// Check if using percentage-based Point WITHOUT selector (screen-relative tap)
+	// Check if using Point WITHOUT selector (screen-relative tap)
 	if step.Point != "" && step.Selector.IsEmpty() {
-		return d.tapOnPointWithPercentage(step.Point)
+		return d.tapOnPointWithCoords(step.Point)
 	}
 
 	// Handle keyboard key names — iOS keyboard buttons aren't reliably findable via WDA
@@ -45,12 +43,12 @@ func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
 
 	// If Point is specified WITH selector, tap at relative position within element bounds
 	if step.Point != "" && info != nil && info.Bounds.Width > 0 {
-		xPct, yPct, parseErr := parsePercentageCoords(step.Point)
+		px, py, parseErr := core.ParsePointCoords(step.Point, info.Bounds.Width, info.Bounds.Height)
 		if parseErr != nil {
 			return errorResult(parseErr, "Invalid point coordinates")
 		}
-		x := float64(info.Bounds.X) + float64(info.Bounds.Width)*xPct
-		y := float64(info.Bounds.Y) + float64(info.Bounds.Height)*yPct
+		x := float64(info.Bounds.X + px)
+		y := float64(info.Bounds.Y + py)
 		if err := d.client.Tap(x, y); err != nil {
 			return errorResult(err, "Tap at relative point failed")
 		}
@@ -92,26 +90,23 @@ func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
 	return successResult("Tapped element", info)
 }
 
-// tapOnPointWithPercentage handles percentage-based tap (e.g., "85%, 50%")
-func (d *Driver) tapOnPointWithPercentage(point string) *core.CommandResult {
-	width, height, err := d.client.WindowSize()
+// tapOnPointWithCoords handles point-based tap with either percentage ("85%, 50%") or absolute ("123, 456") coordinates.
+func (d *Driver) tapOnPointWithCoords(point string) *core.CommandResult {
+	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, "Failed to get screen size")
 	}
 
-	xPct, yPct, err := parsePercentageCoords(point)
+	x, y, err := core.ParsePointCoords(point, width, height)
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Invalid point coordinates: %s", point))
 	}
 
-	x := float64(width) * xPct
-	y := float64(height) * yPct
-
-	if err := d.client.Tap(x, y); err != nil {
+	if err := d.client.Tap(float64(x), float64(y)); err != nil {
 		return errorResult(err, "Tap at point failed")
 	}
 
-	return successResult(fmt.Sprintf("Tapped at (%.0f, %.0f)", x, y), nil)
+	return successResult(fmt.Sprintf("Tapped at (%d, %d)", x, y), nil)
 }
 
 func (d *Driver) doubleTapOn(step *flow.DoubleTapOnStep) *core.CommandResult {
@@ -151,18 +146,18 @@ func (d *Driver) longPressOn(step *flow.LongPressOnStep) *core.CommandResult {
 func (d *Driver) tapOnPoint(step *flow.TapOnPointStep) *core.CommandResult {
 	var x, y float64
 
-	// Handle percentage-based coordinates via Point field
+	// Handle Point field (percentage or absolute coordinates)
 	if step.Point != "" {
-		width, height, err := d.client.WindowSize()
+		width, height, err := d.screenSize()
 		if err != nil {
 			return errorResult(err, "Failed to get screen size")
 		}
-		pctX, pctY, err := parsePercentageCoords(step.Point)
+		px, py, err := core.ParsePointCoords(step.Point, width, height)
 		if err != nil {
 			return errorResult(err, "Invalid point format")
 		}
-		x = float64(width) * pctX
-		y = float64(height) * pctY
+		x = float64(px)
+		y = float64(py)
 	} else {
 		x = float64(step.X)
 		y = float64(step.Y)
@@ -393,7 +388,7 @@ func (d *Driver) inputRandom(step *flow.InputRandomStep) *core.CommandResult {
 // Scroll/Swipe commands
 
 func (d *Driver) scroll(step *flow.ScrollStep) *core.CommandResult {
-	width, height, err := d.client.WindowSize()
+	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, "Failed to get screen size")
 	}
@@ -466,7 +461,7 @@ func (d *Driver) scrollUntilVisible(step *flow.ScrollUntilVisibleStep) *core.Com
 }
 
 func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
-	width, height, err := d.client.WindowSize()
+	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, "Failed to get screen size")
 	}
@@ -998,58 +993,23 @@ func selectorDesc(sel flow.Selector) string {
 }
 
 func randomString(length int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
-	}
-	return string(b)
+	return core.RandomString(length)
 }
 
 func randomEmail() string {
-	user := randomString(8)
-	domains := []string{"example.com", "test.com", "mail.com"}
-	domain := domains[rand.Intn(len(domains))]
-	return user + "@" + domain
+	return core.RandomEmail()
 }
 
 func randomNumber(length int) string {
-	const digits = "0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = digits[rand.Intn(len(digits))]
-	}
-	return string(b)
+	return core.RandomNumber(length)
 }
 
 func randomPersonName() string {
-	firstNames := []string{"John", "Jane", "Michael", "Emily", "David", "Sarah", "James", "Emma", "Robert", "Olivia"}
-	lastNames := []string{"Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"}
-	return firstNames[rand.Intn(len(firstNames))] + " " + lastNames[rand.Intn(len(lastNames))]
+	return core.RandomPersonName()
 }
 
 func parsePercentageCoords(coord string) (float64, float64, error) {
-	// Parse "50%, 50%" format
-	coord = strings.ReplaceAll(coord, " ", "")
-	parts := strings.Split(coord, ",")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid coordinate format: %s", coord)
-	}
-
-	xStr := strings.TrimSuffix(parts[0], "%")
-	yStr := strings.TrimSuffix(parts[1], "%")
-
-	x, err := strconv.ParseFloat(xStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid x coordinate: %s", parts[0])
-	}
-
-	y, err := strconv.ParseFloat(yStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid y coordinate: %s", parts[1])
-	}
-
-	return x / 100.0, y / 100.0, nil
+	return core.ParsePercentageCoords(coord)
 }
 
 // setPermissions sets app permissions.

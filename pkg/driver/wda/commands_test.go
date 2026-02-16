@@ -468,29 +468,17 @@ func TestCopyTextFromByID(t *testing.T) {
 // scroll tests
 // =============================================================================
 
-// TestScrollWindowSizeError tests scroll when WindowSize fails.
+// TestScrollScreenSizeNotAvailable tests scroll when screen size is not cached.
 func TestScrollWindowSizeError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/window/size") {
-			jsonResponse(w, map[string]interface{}{
-				"value": map[string]interface{}{
-					"error":   "window size failed",
-					"message": "Cannot get window size",
-				},
-			})
-			return
-		}
-		jsonResponse(w, map[string]interface{}{"status": 0})
-	}))
-	defer server.Close()
-	driver := createTestDriver(server)
+	client := &Client{}
+	// No screen size in PlatformInfo
+	driver := NewDriver(client, &core.PlatformInfo{Platform: "ios"}, "")
 
 	step := &flow.ScrollStep{Direction: "down"}
 	result := driver.scroll(step)
 
 	if result.Success {
-		t.Error("Expected failure when WindowSize fails")
+		t.Error("Expected failure when screen size not available")
 	}
 	if !strings.Contains(result.Message, "screen size") {
 		t.Errorf("Expected message about screen size, got: %s", result.Message)
@@ -2341,38 +2329,26 @@ func TestTapOnPointDirectPixelCoordinates(t *testing.T) {
 }
 
 // =============================================================================
-// tapOnPointWithPercentage additional tests
+// tapOnPointWithCoords additional tests
 // =============================================================================
 
-// TestTapOnPointPercentageWindowSizeFails tests tapOnPointWithPercentage when WindowSize fails.
+// TestTapOnPointPercentageScreenSizeNotAvailable tests tapOnPointWithCoords when screen size not cached.
 func TestTapOnPointPercentageWindowSizeFails(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "/window/size") {
-			jsonResponse(w, map[string]interface{}{
-				"value": map[string]interface{}{
-					"error":   "window size failed",
-					"message": "Cannot get window size",
-				},
-			})
-			return
-		}
-		jsonResponse(w, map[string]interface{}{"status": 0})
-	}))
-	defer server.Close()
-	driver := createTestDriver(server)
+	client := &Client{}
+	// No screen size in PlatformInfo
+	driver := NewDriver(client, &core.PlatformInfo{Platform: "ios"}, "")
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
-		t.Fatalf("Expected failure when WindowSize fails")
+		t.Fatalf("Expected failure when screen size not available")
 	}
 	if !strings.Contains(result.Message, "screen size") {
 		t.Errorf("Expected 'screen size' in message, got: %s", result.Message)
 	}
 }
 
-// TestTapOnPointPercentageInvalidFormat tests tapOnPointWithPercentage with invalid format.
+// TestTapOnPointPercentageInvalidFormat tests tapOnPointWithCoords with invalid format.
 func TestTapOnPointPercentageInvalidFormat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -2387,13 +2363,85 @@ func TestTapOnPointPercentageInvalidFormat(t *testing.T) {
 	defer server.Close()
 	driver := createTestDriver(server)
 
-	result := driver.tapOnPointWithPercentage("abc, xyz")
+	result := driver.tapOnPointWithCoords("abc, xyz")
 
 	if result.Success {
 		t.Fatalf("Expected failure for invalid coordinates")
 	}
 	if !strings.Contains(result.Message, "Invalid point") {
 		t.Errorf("Expected 'Invalid point' in message, got: %s", result.Message)
+	}
+}
+
+// TestTapOnPointAbsolutePixels tests tapOnPointWithCoords with absolute pixel coordinates.
+func TestTapOnPointAbsolutePixels(t *testing.T) {
+	var tapX, tapY float64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/window/size") {
+			jsonResponse(w, map[string]interface{}{
+				"value": map[string]interface{}{"width": 390.0, "height": 844.0},
+			})
+			return
+		}
+		if strings.Contains(r.URL.Path, "/wda/tap") {
+			body, _ := io.ReadAll(r.Body)
+			var payload map[string]interface{}
+			_ = json.Unmarshal(body, &payload)
+			tapX, _ = payload["x"].(float64)
+			tapY, _ = payload["y"].(float64)
+			jsonResponse(w, map[string]interface{}{"status": 0})
+			return
+		}
+		jsonResponse(w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+	driver := createTestDriver(server)
+
+	result := driver.tapOnPointWithCoords("123, 456")
+
+	if !result.Success {
+		t.Fatalf("Expected success, got: %s", result.Message)
+	}
+	// Absolute pixels: should tap at exactly (123, 456)
+	if tapX != 123.0 || tapY != 456.0 {
+		t.Errorf("Expected tap at (123, 456), got (%.0f, %.0f)", tapX, tapY)
+	}
+}
+
+// TestTapOnWithAbsolutePixelPoint tests tapOn with absolute pixel point and no selector.
+func TestTapOnWithAbsolutePixelPoint(t *testing.T) {
+	var tapX, tapY float64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/window/size") {
+			jsonResponse(w, map[string]interface{}{
+				"value": map[string]interface{}{"width": 390.0, "height": 844.0},
+			})
+			return
+		}
+		if strings.Contains(r.URL.Path, "/wda/tap") {
+			body, _ := io.ReadAll(r.Body)
+			var payload map[string]interface{}
+			_ = json.Unmarshal(body, &payload)
+			tapX, _ = payload["x"].(float64)
+			tapY, _ = payload["y"].(float64)
+			jsonResponse(w, map[string]interface{}{"status": 0})
+			return
+		}
+		jsonResponse(w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+	driver := createTestDriver(server)
+
+	step := &flow.TapOnStep{Point: "200, 300"}
+	result := driver.tapOn(step)
+
+	if !result.Success {
+		t.Fatalf("Expected success, got: %s", result.Message)
+	}
+	if tapX != 200.0 || tapY != 300.0 {
+		t.Errorf("Expected tap at (200, 300), got (%.0f, %.0f)", tapX, tapY)
 	}
 }
 

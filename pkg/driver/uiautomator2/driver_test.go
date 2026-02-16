@@ -624,7 +624,7 @@ func TestExecutePressKeyError(t *testing.T) {
 
 func TestExecuteScroll(t *testing.T) {
 	client := &MockUIA2Client{}
-	driver := New(client, nil, nil)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 	step := &flow.ScrollStep{Direction: "down"}
 	result := driver.Execute(step)
@@ -651,7 +651,7 @@ func TestExecuteScrollError(t *testing.T) {
 
 func TestExecuteScrollDefaultDirection(t *testing.T) {
 	client := &MockUIA2Client{}
-	driver := New(client, nil, nil)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, nil)
 
 	step := &flow.ScrollStep{Direction: ""} // empty = default down
 	result := driver.Execute(step)
@@ -664,7 +664,7 @@ func TestExecuteScrollDefaultDirection(t *testing.T) {
 func TestExecuteSwipe(t *testing.T) {
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
 	step := &flow.SwipeStep{Direction: "up"}
 	result := driver.Execute(step)
@@ -694,7 +694,7 @@ func TestExecuteSwipeError(t *testing.T) {
 func TestExecuteSwipeDefaultDirection(t *testing.T) {
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
 	step := &flow.SwipeStep{Direction: ""} // empty = default up
 	result := driver.Execute(step)
@@ -894,7 +894,7 @@ func TestExecuteAllStepTypes(t *testing.T) {
 	// Most will fail because they need findElement, but this covers the switch paths
 	client := &MockUIA2Client{}
 	shell := &MockShellExecutor{}
-	driver := New(client, nil, shell)
+	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 	driver.SetFindTimeout(100)        // 100ms for fast test failure
 	driver.SetOptionalFindTimeout(50) // 50ms for optional elements
 
@@ -1871,7 +1871,8 @@ func TestScrollUntilVisibleFound(t *testing.T) {
 	defer server.Close()
 
 	client := newMockHTTPClient(server.URL)
-	driver := New(client.Client, nil, nil)
+	info := &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 2400}
+	driver := New(client.Client, info, nil)
 
 	step := &flow.ScrollUntilVisibleStep{
 		Element:   flow.Selector{Text: "Target"},

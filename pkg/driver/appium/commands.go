@@ -15,6 +15,19 @@ import (
 // Tap commands
 
 func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
+	// Check if using Point WITHOUT selector (screen-relative tap)
+	if step.Point != "" && step.Selector.IsEmpty() {
+		w, h := d.client.ScreenSize()
+		x, y, err := core.ParsePointCoords(step.Point, w, h)
+		if err != nil {
+			return errorResult(err, "Invalid point coordinates")
+		}
+		if err := d.client.Tap(x, y); err != nil {
+			return errorResult(err, "Failed to tap at point")
+		}
+		return successResult(fmt.Sprintf("Tapped at (%d, %d)", x, y), nil)
+	}
+
 	timeout := time.Duration(step.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = d.getFindTimeout()
@@ -96,14 +109,13 @@ func (d *Driver) tapOnPoint(step *flow.TapOnPointStep) *core.CommandResult {
 	x := step.X
 	y := step.Y
 
-	// Handle "50%, 50%" format in Point field
+	// Handle Point field (percentage or absolute coordinates)
 	if step.Point != "" {
-		xPct, yPct, err := parsePercentageCoords(step.Point)
+		var err error
+		x, y, err = core.ParsePointCoords(step.Point, w, h)
 		if err != nil {
 			return errorResult(err, "Invalid point coordinates")
 		}
-		x = int(float64(w) * xPct)
-		y = int(float64(h) * yPct)
 	}
 
 	if err := d.client.Tap(x, y); err != nil {
@@ -793,59 +805,25 @@ func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResu
 // Random data generators
 
 func randomString(length int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = chars[time.Now().UnixNano()%int64(len(chars))]
-		time.Sleep(time.Nanosecond)
-	}
-	return string(b)
+	return core.RandomString(length)
 }
 
 func randomEmail() string {
-	return randomString(8) + "@example.com"
+	return core.RandomEmail()
 }
 
 func randomNumber(length int) string {
-	const digits = "0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = digits[time.Now().UnixNano()%10]
-		time.Sleep(time.Nanosecond)
-	}
-	return string(b)
+	return core.RandomNumber(length)
 }
 
 func randomPersonName() string {
-	firstNames := []string{"John", "Jane", "Michael", "Emily", "David"}
-	lastNames := []string{"Smith", "Johnson", "Williams", "Brown", "Jones"}
-	return firstNames[time.Now().UnixNano()%int64(len(firstNames))] + " " + lastNames[time.Now().UnixNano()%int64(len(lastNames))]
+	return core.RandomPersonName()
 }
 
 // Helpers
 
 func parsePercentageCoords(coord string) (float64, float64, error) {
-	// Parse "50%, 15%" format
-	coord = strings.ReplaceAll(coord, " ", "")
-	parts := strings.Split(coord, ",")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid coordinate format: %s", coord)
-	}
-
-	xStr := strings.TrimSuffix(parts[0], "%")
-	yStr := strings.TrimSuffix(parts[1], "%")
-
-	x, err := strconv.ParseFloat(xStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid x coordinate: %s", parts[0])
-	}
-
-	y, err := strconv.ParseFloat(yStr, 64)
-	if err != nil {
-		return 0, 0, fmt.Errorf("invalid y coordinate: %s", parts[1])
-	}
-
-	return x / 100, y / 100, nil
+	return core.ParsePercentageCoords(coord)
 }
 
 // grantPermissions grants permissions via mobile: shell pm grant.

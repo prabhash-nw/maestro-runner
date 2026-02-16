@@ -37,6 +37,14 @@ func NewDriver(client *Client, info *core.PlatformInfo, udid string) *Driver {
 	}
 }
 
+// screenSize returns cached screen dimensions from PlatformInfo.
+func (d *Driver) screenSize() (int, int, error) {
+	if d.info != nil && d.info.ScreenWidth > 0 && d.info.ScreenHeight > 0 {
+		return d.info.ScreenWidth, d.info.ScreenHeight, nil
+	}
+	return 0, 0, fmt.Errorf("screen dimensions not available")
+}
+
 // SetFindTimeout sets the timeout for finding required elements.
 func (d *Driver) SetFindTimeout(ms int) {
 	d.findTimeout = ms
@@ -728,18 +736,9 @@ func applyRelativeFilter(candidates []*ParsedElement, anchor *ParsedElement, fil
 
 // successResult creates a success result.
 func successResult(msg string, elem *core.ElementInfo) *core.CommandResult {
-	return &core.CommandResult{
-		Success: true,
-		Message: msg,
-		Element: elem,
-	}
+	return core.SuccessResult(msg, elem)
 }
 
-// errorResult creates an error result.
 func errorResult(err error, msg string) *core.CommandResult {
-	return &core.CommandResult{
-		Success: false,
-		Error:   err,
-		Message: msg,
-	}
+	return core.ErrorResult(err, msg)
 }

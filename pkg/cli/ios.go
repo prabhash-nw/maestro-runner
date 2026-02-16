@@ -132,17 +132,25 @@ func CreateIOSDriver(cfg *RunConfig) (core.Driver, func(), error) {
 		appVersion = getIOSAppVersion(udid, cfg.AppID)
 	}
 
-	platformInfo := &core.PlatformInfo{
-		Platform:    "ios",
-		OSVersion:   deviceInfo.OSVersion,
-		DeviceName:  deviceInfo.Name,
-		DeviceID:    udid,
-		IsSimulator: deviceInfo.IsSimulator,
-		AppID:       cfg.AppID,
-		AppVersion:  appVersion,
+	// 8. Get screen size
+	var screenW, screenH int
+	if w, h, err := client.WindowSize(); err == nil {
+		screenW, screenH = w, h
 	}
 
-	// 8. Create driver
+	platformInfo := &core.PlatformInfo{
+		Platform:     "ios",
+		OSVersion:    deviceInfo.OSVersion,
+		DeviceName:   deviceInfo.Name,
+		DeviceID:     udid,
+		IsSimulator:  deviceInfo.IsSimulator,
+		ScreenWidth:  screenW,
+		ScreenHeight: screenH,
+		AppID:        cfg.AppID,
+		AppVersion:   appVersion,
+	}
+
+	// 9. Create driver
 	driver := wdadriver.NewDriver(client, platformInfo, udid)
 	driver.SetAppFile(cfg.AppFile)
 

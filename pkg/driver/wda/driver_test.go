@@ -3157,7 +3157,7 @@ func TestClientElementDisplayedError(t *testing.T) {
 	}
 }
 
-// TestTapOnPointWithPercentageError tests tapOnPointWithPercentage with invalid percentage
+// TestTapOnPointWithPercentageError tests tapOnPointWithCoords with invalid percentage
 func TestTapOnPointWithPercentageInvalidX(t *testing.T) {
 	server := mockWDAServerForDriver()
 	defer server.Close()
@@ -3171,7 +3171,7 @@ func TestTapOnPointWithPercentageInvalidX(t *testing.T) {
 	}
 }
 
-// TestTapOnPointWithPercentageInvalidY tests tapOnPointWithPercentage with invalid y percentage
+// TestTapOnPointWithPercentageInvalidY tests tapOnPointWithCoords with invalid y percentage
 func TestTapOnPointWithPercentageInvalidY(t *testing.T) {
 	server := mockWDAServerForDriver()
 	defer server.Close()
@@ -4324,7 +4324,7 @@ func TestTapOnWithElementIDClickFallback(t *testing.T) {
 	}
 }
 
-// TestTapOnPointWithPercentageTapFails tests tapOnPointWithPercentage when tap fails
+// TestTapOnPointWithPercentageTapFails tests tapOnPointWithCoords when tap fails
 func TestTapOnPointWithPercentageTapFails(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -4350,7 +4350,7 @@ func TestTapOnPointWithPercentageTapFails(t *testing.T) {
 	defer server.Close()
 	driver := createTestDriver(server)
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
 		t.Error("Expected failure when tap fails")
@@ -4567,27 +4567,16 @@ func TestParseResponseWDAErrorNoMessage(t *testing.T) {
 	}
 }
 
-// TestTapOnPointWithPercentageWindowSizeError tests when WindowSize fails
+// TestTapOnPointWithPercentageWindowSizeError tests when screen size is not cached
 func TestTapOnPointWithPercentageWindowSizeError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if strings.HasSuffix(r.URL.Path, "/window/size") {
-			jsonResponse(w, map[string]interface{}{
-				"value": map[string]interface{}{
-					"error": "window size failed",
-				},
-			})
-			return
-		}
-		jsonResponse(w, map[string]interface{}{"status": 0})
-	}))
-	defer server.Close()
-	driver := createTestDriver(server)
+	client := &Client{}
+	// No screen size in PlatformInfo
+	driver := NewDriver(client, &core.PlatformInfo{Platform: "ios"}, "")
 
-	result := driver.tapOnPointWithPercentage("50%, 50%")
+	result := driver.tapOnPointWithCoords("50%, 50%")
 
 	if result.Success {
-		t.Error("Expected failure when WindowSize fails")
+		t.Error("Expected failure when screen size not available")
 	}
 }
 
