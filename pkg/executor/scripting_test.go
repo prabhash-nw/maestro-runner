@@ -1804,3 +1804,176 @@ func TestScriptEngine_EvalCondition_UndefinedVariable(t *testing.T) {
 		t.Error("EvalCondition(SOME_UNDEFINED_VAR) should return false for undefined variable")
 	}
 }
+
+// ===========================================
+// ExpandStep: RunFlowStep
+// ===========================================
+
+func TestScriptEngine_ExpandStep_RunFlowStep(t *testing.T) {
+	se := NewScriptEngine()
+	defer se.Close()
+
+	se.SetVariable("FLOW_FILE", "auth.yaml")
+	se.SetVariable("BUTTON_ID", "profile_button")
+	se.SetVariable("LABEL_TEXT", "Welcome")
+	se.SetVariable("ENV_VAL", "production")
+
+	step := &flow.RunFlowStep{
+		File: "${FLOW_FILE}",
+		When: &flow.Condition{
+			Visible:    &flow.Selector{ID: "${BUTTON_ID}"},
+			NotVisible: &flow.Selector{Text: "${LABEL_TEXT}"},
+			Script:     "${BUTTON_ID} !== undefined",
+			Platform:   "${ENV_VAL}",
+		},
+		Env: map[string]string{
+			"MODE": "${ENV_VAL}",
+		},
+	}
+
+	se.ExpandStep(step)
+
+	if step.File != "auth.yaml" {
+		t.Errorf("File = %q, want %q", step.File, "auth.yaml")
+	}
+	if step.When.Visible.ID != "profile_button" {
+		t.Errorf("When.Visible.ID = %q, want %q", step.When.Visible.ID, "profile_button")
+	}
+	if step.When.NotVisible.Text != "Welcome" {
+		t.Errorf("When.NotVisible.Text = %q, want %q", step.When.NotVisible.Text, "Welcome")
+	}
+	if step.When.Script != "profile_button !== undefined" {
+		t.Errorf("When.Script = %q, want %q", step.When.Script, "profile_button !== undefined")
+	}
+	if step.When.Platform != "production" {
+		t.Errorf("When.Platform = %q, want %q", step.When.Platform, "production")
+	}
+	if step.Env["MODE"] != "production" {
+		t.Errorf("Env[MODE] = %q, want %q", step.Env["MODE"], "production")
+	}
+}
+
+func TestScriptEngine_ExpandStep_RunFlowStep_NilWhen(t *testing.T) {
+	se := NewScriptEngine()
+	defer se.Close()
+
+	se.SetVariable("FILE", "test.yaml")
+
+	// RunFlowStep with no When condition should not panic
+	step := &flow.RunFlowStep{
+		File: "${FILE}",
+	}
+
+	se.ExpandStep(step)
+
+	if step.File != "test.yaml" {
+		t.Errorf("File = %q, want %q", step.File, "test.yaml")
+	}
+}
+
+// ===========================================
+// CheckCondition: variable expansion
+// ===========================================
+
+func TestCheckCondition_ExpandsVisibleSelectorVariables(t *testing.T) {
+	se := NewScriptEngine()
+	defer se.Close()
+
+	se.SetVariable("BUTTON_ID", "profile_button")
+
+	// Mock driver always returns success for Execute()
+	driver := &mockConditionDriver{executeResult: true}
+
+	cond := flow.Condition{
+		Visible: &flow.Selector{ID: "${BUTTON_ID}"},
+	}
+
+	result := se.CheckCondition(context.Background(), cond, driver)
+	if !result {
+		t.Error("CheckCondition should return true when visible element is found")
+	}
+
+	// Verify the selector was expanded before being sent to the driver
+	if driver.lastSelector == nil {
+		t.Fatal("Driver.Execute was not called")
+	}
+	if driver.lastSelector.ID != "profile_button" {
+		t.Errorf("Selector.ID sent to driver = %q, want %q", driver.lastSelector.ID, "profile_button")
+	}
+}
+
+func TestCheckCondition_ExpandsNotVisibleSelectorVariables(t *testing.T) {
+	se := NewScriptEngine()
+	defer se.Close()
+
+	se.SetVariable("LABEL", "Loading")
+
+	driver := &mockConditionDriver{executeResult: true}
+
+	cond := flow.Condition{
+		NotVisible: &flow.Selector{Text: "${LABEL}"},
+	}
+
+	result := se.CheckCondition(context.Background(), cond, driver)
+	if !result {
+		t.Error("CheckCondition should return true when not-visible check passes")
+	}
+
+	if driver.lastSelector == nil {
+		t.Fatal("Driver.Execute was not called")
+	}
+	if driver.lastSelector.Text != "Loading" {
+		t.Errorf("Selector.Text sent to driver = %q, want %q", driver.lastSelector.Text, "Loading")
+	}
+}
+
+func TestCheckCondition_ExpandsPlatformVariable(t *testing.T) {
+	se := NewScriptEngine()
+	defer se.Close()
+
+	se.SetVariable("TARGET_PLATFORM", "android")
+
+	driver := &mockConditionDriver{
+		executeResult: true,
+		platform:      "android",
+	}
+
+	cond := flow.Condition{
+		Platform: "${TARGET_PLATFORM}",
+	}
+
+	result := se.CheckCondition(context.Background(), cond, driver)
+	if !result {
+		t.Error("CheckCondition should return true when platform matches after expansion")
+	}
+}
+
+// mockConditionDriver captures the selector passed to Execute for verification.
+type mockConditionDriver struct {
+	executeResult bool
+	platform      string
+	lastSelector  *flow.Selector
+}
+
+func (d *mockConditionDriver) Execute(step flow.Step) *core.CommandResult {
+	// Capture the selector from assert steps
+	switch s := step.(type) {
+	case *flow.AssertVisibleStep:
+		d.lastSelector = &s.Selector
+	case *flow.AssertNotVisibleStep:
+		d.lastSelector = &s.Selector
+	}
+	return &core.CommandResult{Success: d.executeResult}
+}
+
+func (d *mockConditionDriver) Screenshot() ([]byte, error)   { return nil, nil }
+func (d *mockConditionDriver) Hierarchy() ([]byte, error)    { return nil, nil }
+func (d *mockConditionDriver) GetState() *core.StateSnapshot { return nil }
+func (d *mockConditionDriver) GetPlatformInfo() *core.PlatformInfo {
+	if d.platform == "" {
+		return &core.PlatformInfo{Platform: "mock"}
+	}
+	return &core.PlatformInfo{Platform: d.platform}
+}
+func (d *mockConditionDriver) SetFindTimeout(ms int)              {}
+func (d *mockConditionDriver) SetWaitForIdleTimeout(ms int) error { return nil }
