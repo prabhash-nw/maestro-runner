@@ -376,8 +376,20 @@ func buildClickableOnlyStrategies(sel flow.Selector) ([]LocatorStrategy, error) 
 	stateFilters := buildStateFilters(sel)
 
 	if sel.Text != "" {
+		escaped := escapeUIAutomatorString(sel.Text)
+		// Always try textContains/descriptionContains first (no regex needed)
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().textContains("` + escaped + `").clickable(true)` + stateFilters,
+		})
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().descriptionContains("` + escaped + `").clickable(true)` + stateFilters,
+		})
+		// Fall back to regex match (case-insensitive) for partial/pattern matches
 		if looksLikeRegex(sel.Text) {
-			pattern := "(?is)" + escapeUIAutomatorString(sel.Text)
+			regexEscaped := escapeUIAutomator(sel.Text)
+			pattern := "(?is)" + regexEscaped
 			strategies = append(strategies, LocatorStrategy{
 				Strategy: uiautomator2.StrategyUIAutomator,
 				Value:    `new UiSelector().textMatches("` + pattern + `").clickable(true)` + stateFilters,
@@ -385,16 +397,6 @@ func buildClickableOnlyStrategies(sel flow.Selector) ([]LocatorStrategy, error) 
 			strategies = append(strategies, LocatorStrategy{
 				Strategy: uiautomator2.StrategyUIAutomator,
 				Value:    `new UiSelector().descriptionMatches("` + pattern + `").clickable(true)` + stateFilters,
-			})
-		} else {
-			escaped := escapeUIAutomatorString(sel.Text)
-			strategies = append(strategies, LocatorStrategy{
-				Strategy: uiautomator2.StrategyUIAutomator,
-				Value:    `new UiSelector().textContains("` + escaped + `").clickable(true)` + stateFilters,
-			})
-			strategies = append(strategies, LocatorStrategy{
-				Strategy: uiautomator2.StrategyUIAutomator,
-				Value:    `new UiSelector().descriptionContains("` + escaped + `").clickable(true)` + stateFilters,
 			})
 		}
 	}
@@ -997,8 +999,30 @@ func buildSelectorsWithOptions(sel flow.Selector, timeoutMs int, preferClickable
 
 	// Text-based selector
 	if sel.Text != "" {
+		escaped := escapeUIAutomatorString(sel.Text)
+		// Always try textContains/descriptionContains first (no regex needed, handles special chars)
+		if preferClickable {
+			strategies = append(strategies, LocatorStrategy{
+				Strategy: uiautomator2.StrategyUIAutomator,
+				Value:    `new UiSelector().textContains("` + escaped + `").clickable(true)` + stateFilters,
+			})
+			strategies = append(strategies, LocatorStrategy{
+				Strategy: uiautomator2.StrategyUIAutomator,
+				Value:    `new UiSelector().descriptionContains("` + escaped + `").clickable(true)` + stateFilters,
+			})
+		}
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().textContains("` + escaped + `")` + stateFilters,
+		})
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().descriptionContains("` + escaped + `")` + stateFilters,
+		})
+		// Fall back to regex match (case-insensitive) with proper escaping
 		if looksLikeRegex(sel.Text) {
-			pattern := "(?is)" + escapeUIAutomatorString(sel.Text)
+			regexEscaped := escapeUIAutomator(sel.Text)
+			pattern := "(?is)" + regexEscaped
 			if preferClickable {
 				strategies = append(strategies, LocatorStrategy{
 					Strategy: uiautomator2.StrategyUIAutomator,
@@ -1016,26 +1040,6 @@ func buildSelectorsWithOptions(sel flow.Selector, timeoutMs int, preferClickable
 			strategies = append(strategies, LocatorStrategy{
 				Strategy: uiautomator2.StrategyUIAutomator,
 				Value:    `new UiSelector().descriptionMatches("` + pattern + `")` + stateFilters,
-			})
-		} else {
-			escaped := escapeUIAutomatorString(sel.Text)
-			if preferClickable {
-				strategies = append(strategies, LocatorStrategy{
-					Strategy: uiautomator2.StrategyUIAutomator,
-					Value:    `new UiSelector().textContains("` + escaped + `").clickable(true)` + stateFilters,
-				})
-				strategies = append(strategies, LocatorStrategy{
-					Strategy: uiautomator2.StrategyUIAutomator,
-					Value:    `new UiSelector().descriptionContains("` + escaped + `").clickable(true)` + stateFilters,
-				})
-			}
-			strategies = append(strategies, LocatorStrategy{
-				Strategy: uiautomator2.StrategyUIAutomator,
-				Value:    `new UiSelector().textContains("` + escaped + `")` + stateFilters,
-			})
-			strategies = append(strategies, LocatorStrategy{
-				Strategy: uiautomator2.StrategyUIAutomator,
-				Value:    `new UiSelector().descriptionContains("` + escaped + `")` + stateFilters,
 			})
 		}
 	}
