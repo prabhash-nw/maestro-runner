@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -20,7 +22,7 @@ const (
 type VMServiceClient struct {
 	conn      *websocket.Conn
 	isolateID string
-	ctx       context.Context
+	ctx context.Context
 	cancel    context.CancelFunc
 	mu        sync.Mutex
 	nextID    int
@@ -41,8 +43,9 @@ type jsonRPCResponse struct {
 }
 
 type jsonRPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 // Connect dials the Flutter VM Service WebSocket and discovers the Flutter isolate.
@@ -77,8 +80,54 @@ func Connect(wsURL string) (*VMServiceClient, error) {
 	return c, nil
 }
 
-// Close closes the WebSocket connection.
+// ConnectUnix dials the Flutter VM Service over a Unix socket.
+// Used with adb forward localfilesystem:<socketPath> tcp:<port>.
+func ConnectUnix(socketPath, token string) (*VMServiceClient, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+			},
+		},
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(ctx, dialTimeout)
+	defer dialCancel()
+
+	// Host is ignored — transport always dials the Unix socket
+	wsURL := fmt.Sprintf("ws://localhost/%s/ws", token)
+	conn, _, err := websocket.Dial(dialCtx, wsURL, &websocket.DialOptions{
+		HTTPClient: httpClient,
+	})
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("dial VM service via socket: %w", err)
+	}
+
+	conn.SetReadLimit(16 * 1024 * 1024) // 16 MB
+
+	c := &VMServiceClient{
+		conn:   conn,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	if err := c.findFlutterIsolate(); err != nil {
+		conn.Close(websocket.StatusNormalClosure, "")
+		cancel()
+		return nil, fmt.Errorf("find flutter isolate: %w", err)
+	}
+
+	return c, nil
+}
+
+// Close closes the WebSocket connection. Safe to call on nil receiver.
 func (c *VMServiceClient) Close() error {
+	if c == nil {
+		return nil
+	}
 	c.cancel()
 	return c.conn.Close(websocket.StatusNormalClosure, "")
 }
@@ -208,6 +257,9 @@ func (c *VMServiceClient) call(method string, params interface{}) (json.RawMessa
 		}
 
 		if resp.Error != nil {
+			if len(resp.Error.Data) > 0 {
+				return nil, fmt.Errorf("RPC error %d: %s (data: %s)", resp.Error.Code, resp.Error.Message, string(resp.Error.Data))
+			}
 			return nil, fmt.Errorf("RPC error %d: %s", resp.Error.Code, resp.Error.Message)
 		}
 

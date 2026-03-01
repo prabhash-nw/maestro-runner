@@ -29,12 +29,6 @@ func (m *mockDriver) GetPlatformInfo() *core.PlatformInfo    { return &core.Plat
 func (m *mockDriver) SetFindTimeout(ms int)                  {}
 func (m *mockDriver) SetWaitForIdleTimeout(ms int) error     { return nil }
 
-// mockVMClient wraps VMServiceClient behavior for testing.
-type mockFlutterClient struct {
-	semanticsDump string
-	err           error
-}
-
 func TestFlutterDriver_PassThrough_Success(t *testing.T) {
 	inner := &mockDriver{
 		executeFunc: func(step flow.Step) *core.CommandResult {
@@ -119,29 +113,20 @@ func TestFlutterDriver_EmptySelector_NoFallback(t *testing.T) {
 }
 
 func TestFlutterDriver_TapOnFallback(t *testing.T) {
-	callCount := 0
 	var tappedStep flow.Step
 
 	inner := &mockDriver{
 		executeFunc: func(step flow.Step) *core.CommandResult {
-			callCount++
-			if callCount == 1 {
-				// First call: inner driver can't find element
-				return core.ErrorResult(fmt.Errorf("element not found: text=\"Login\""), "")
+			// Inner driver can't find by selector (accessibility bridge limitation)
+			// but can tap by coordinates
+			if _, ok := step.(*flow.TapOnPointStep); ok {
+				tappedStep = step
+				return core.SuccessResult("tapped at point", nil)
 			}
-			// Second call: tap on point
-			tappedStep = step
-			return core.SuccessResult("tapped at point", nil)
+			return core.ErrorResult(fmt.Errorf("element not found: text=\"Login\""), "")
 		},
 	}
 
-	// Create a FlutterDriver with a real semantics tree
-	fd := &FlutterDriver{
-		inner: inner,
-		client: nil, // We'll override getSemanticsTreeWithReconnect
-	}
-
-	// We need to test with a real client, so let's use the mock VM service
 	semanticsDump := `SemanticsNode#0
  Rect.fromLTRB(0.0, 0.0, 411.4, 890.3)
  scaled by 1.0x
@@ -151,7 +136,6 @@ func TestFlutterDriver_TapOnFallback(t *testing.T) {
    identifier: "login_button"
 `
 
-	// Start mock VM service
 	wsURL, cleanup := startMockVMService(t, semanticsDump)
 	defer cleanup()
 
@@ -161,7 +145,7 @@ func TestFlutterDriver_TapOnFallback(t *testing.T) {
 	}
 	defer client.Close()
 
-	fd.client = client
+	fd := &FlutterDriver{inner: inner, client: client}
 
 	step := &flow.TapOnStep{}
 	step.Selector.Text = "Login"
@@ -226,17 +210,15 @@ func TestFlutterDriver_AssertVisibleFallback(t *testing.T) {
 }
 
 func TestFlutterDriver_DoubleTapFallback(t *testing.T) {
-	callCount := 0
 	var tappedStep flow.Step
 
 	inner := &mockDriver{
 		executeFunc: func(step flow.Step) *core.CommandResult {
-			callCount++
-			if callCount == 1 {
-				return core.ErrorResult(fmt.Errorf("element not found"), "")
+			if _, ok := step.(*flow.TapOnPointStep); ok {
+				tappedStep = step
+				return core.SuccessResult("double tapped", nil)
 			}
-			tappedStep = step
-			return core.SuccessResult("double tapped", nil)
+			return core.ErrorResult(fmt.Errorf("element not found"), "")
 		},
 	}
 
@@ -278,17 +260,15 @@ func TestFlutterDriver_DoubleTapFallback(t *testing.T) {
 }
 
 func TestFlutterDriver_LongPressFallback(t *testing.T) {
-	callCount := 0
 	var tappedStep flow.Step
 
 	inner := &mockDriver{
 		executeFunc: func(step flow.Step) *core.CommandResult {
-			callCount++
-			if callCount == 1 {
-				return core.ErrorResult(fmt.Errorf("element not found"), "")
+			if _, ok := step.(*flow.TapOnPointStep); ok {
+				tappedStep = step
+				return core.SuccessResult("long pressed", nil)
 			}
-			tappedStep = step
-			return core.SuccessResult("long pressed", nil)
+			return core.ErrorResult(fmt.Errorf("element not found"), "")
 		},
 	}
 
@@ -330,14 +310,14 @@ func TestFlutterDriver_LongPressFallback(t *testing.T) {
 }
 
 func TestFlutterDriver_FindByID(t *testing.T) {
-	callCount := 0
+	var tappedStep flow.Step
 	inner := &mockDriver{
 		executeFunc: func(step flow.Step) *core.CommandResult {
-			callCount++
-			if callCount == 1 {
-				return core.ErrorResult(fmt.Errorf("element not found"), "")
+			if _, ok := step.(*flow.TapOnPointStep); ok {
+				tappedStep = step
+				return core.SuccessResult("tapped", nil)
 			}
-			return core.SuccessResult("tapped", nil)
+			return core.ErrorResult(fmt.Errorf("element not found"), "")
 		},
 	}
 
@@ -368,6 +348,15 @@ func TestFlutterDriver_FindByID(t *testing.T) {
 	result := fd.Execute(step)
 	if !result.Success {
 		t.Fatalf("expected success finding by ID, got: %v", result.Error)
+	}
+
+	// Verify it tapped at the center of Rect(10, 20, 110, 70) = (60, 45)
+	pointStep, ok := tappedStep.(*flow.TapOnPointStep)
+	if !ok {
+		t.Fatalf("expected TapOnPointStep, got %T", tappedStep)
+	}
+	if pointStep.X != 60 || pointStep.Y != 45 {
+		t.Errorf("tap point = (%d, %d), want (60, 45)", pointStep.X, pointStep.Y)
 	}
 }
 
@@ -516,7 +505,7 @@ func TestFlutterDriver_WidgetTreeFallback_NoMatch(t *testing.T) {
 	}
 	defer client.Close()
 
-	fd := &FlutterDriver{inner: inner, client: client}
+	fd := &FlutterDriver{inner: inner, client: client, findTimeoutMs: 2000}
 
 	step := &flow.AssertVisibleStep{}
 	step.Selector.Text = "totally missing element"

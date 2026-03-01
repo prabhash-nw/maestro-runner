@@ -112,7 +112,8 @@ func CreateAndroidDriver(cfg *RunConfig) (core.Driver, func(), error) {
 
 	// 5. Wrap driver with Flutter VM Service fallback (lazy connection)
 	if !cfg.NoFlutterFallback {
-		fw := flutter.Wrap(driver, nil, dev, cfg.AppID)
+		socketPath := fmt.Sprintf("/tmp/%s-flutter.sock", dev.Serial())
+		fw := flutter.Wrap(driver, nil, dev, cfg.AppID, socketPath)
 		driver = fw
 		origCleanup := cleanup
 		cleanup = func() {

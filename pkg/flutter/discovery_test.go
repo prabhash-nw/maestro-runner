@@ -6,23 +6,23 @@ import (
 )
 
 type mockDevice struct {
-	shellOutput   string
-	shellErr      error
-	forwardCalled bool
-	forwardLocal  int
-	forwardRemote int
-	forwardErr    error
+	shellOutput          string
+	shellErr             error
+	forwardSocketCalled  bool
+	forwardSocketPath    string
+	forwardSocketRemote  int
+	forwardSocketErr     error
 }
 
 func (m *mockDevice) Shell(cmd string) (string, error) {
 	return m.shellOutput, m.shellErr
 }
 
-func (m *mockDevice) Forward(localPort, remotePort int) error {
-	m.forwardCalled = true
-	m.forwardLocal = localPort
-	m.forwardRemote = remotePort
-	return m.forwardErr
+func (m *mockDevice) ForwardSocket(socketPath string, remotePort int) error {
+	m.forwardSocketCalled = true
+	m.forwardSocketPath = socketPath
+	m.forwardSocketRemote = remotePort
+	return m.forwardSocketErr
 }
 
 func TestDiscoverVMService(t *testing.T) {
@@ -34,18 +34,21 @@ I/flutter ( 1234): The Dart VM service is listening on http://127.0.0.1:54321/xY
 `,
 	}
 
-	wsURL, err := DiscoverVMService(dev, "com.example.app")
+	token, err := DiscoverVMService(dev, "com.example.app", "/tmp/test-flutter.sock")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if wsURL != "ws://127.0.0.1:54321/xYz789Token/ws" {
-		t.Errorf("wsURL = %q, want %q", wsURL, "ws://127.0.0.1:54321/xYz789Token/ws")
+	if token != "xYz789Token" {
+		t.Errorf("token = %q, want %q", token, "xYz789Token")
 	}
-	if !dev.forwardCalled {
-		t.Error("Forward was not called")
+	if !dev.forwardSocketCalled {
+		t.Error("ForwardSocket was not called")
 	}
-	if dev.forwardLocal != 54321 || dev.forwardRemote != 54321 {
-		t.Errorf("Forward(%d, %d), want (54321, 54321)", dev.forwardLocal, dev.forwardRemote)
+	if dev.forwardSocketPath != "/tmp/test-flutter.sock" {
+		t.Errorf("socketPath = %q, want %q", dev.forwardSocketPath, "/tmp/test-flutter.sock")
+	}
+	if dev.forwardSocketRemote != 54321 {
+		t.Errorf("remotePort = %d, want 54321", dev.forwardSocketRemote)
 	}
 }
 
@@ -56,13 +59,16 @@ I/flutter ( 2000): The Dart VM service is listening on http://127.0.0.1:22222/ne
 `,
 	}
 
-	wsURL, err := DiscoverVMService(dev, "com.example.app")
+	token, err := DiscoverVMService(dev, "com.example.app", "/tmp/test-flutter.sock")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Should use the most recent (last) URL
-	if wsURL != "ws://127.0.0.1:22222/newToken/ws" {
-		t.Errorf("wsURL = %q, want most recent URL", wsURL)
+	// Should use the most recent (last) token
+	if token != "newToken" {
+		t.Errorf("token = %q, want most recent token %q", token, "newToken")
+	}
+	if dev.forwardSocketRemote != 22222 {
+		t.Errorf("remotePort = %d, want 22222", dev.forwardSocketRemote)
 	}
 }
 
@@ -73,34 +79,34 @@ D/SomeTag ( 1234): No flutter here
 `,
 	}
 
-	wsURL, err := DiscoverVMService(dev, "com.example.nativeapp")
+	token, err := DiscoverVMService(dev, "com.example.nativeapp", "/tmp/test-flutter.sock")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if wsURL != "" {
-		t.Errorf("wsURL = %q, want empty for non-Flutter app", wsURL)
+	if token != "" {
+		t.Errorf("token = %q, want empty for non-Flutter app", token)
 	}
-	if dev.forwardCalled {
-		t.Error("Forward should not be called for non-Flutter app")
+	if dev.forwardSocketCalled {
+		t.Error("ForwardSocket should not be called for non-Flutter app")
 	}
 }
 
 func TestDiscoverVMService_EmptyLogcat(t *testing.T) {
 	dev := &mockDevice{shellOutput: ""}
 
-	wsURL, err := DiscoverVMService(dev, "com.example.app")
+	token, err := DiscoverVMService(dev, "com.example.app", "/tmp/test-flutter.sock")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if wsURL != "" {
-		t.Errorf("wsURL = %q, want empty", wsURL)
+	if token != "" {
+		t.Errorf("token = %q, want empty", token)
 	}
 }
 
 func TestDiscoverVMService_ShellError(t *testing.T) {
 	dev := &mockDevice{shellErr: fmt.Errorf("adb error")}
 
-	_, err := DiscoverVMService(dev, "com.example.app")
+	_, err := DiscoverVMService(dev, "com.example.app", "/tmp/test-flutter.sock")
 	if err == nil {
 		t.Error("expected error when shell fails")
 	}
@@ -110,10 +116,10 @@ func TestDiscoverVMService_ForwardError(t *testing.T) {
 	dev := &mockDevice{
 		shellOutput: `I/flutter ( 1234): The Dart VM service is listening on http://127.0.0.1:54321/abc123/
 `,
-		forwardErr: fmt.Errorf("forward failed"),
+		forwardSocketErr: fmt.Errorf("forward failed"),
 	}
 
-	_, err := DiscoverVMService(dev, "com.example.app")
+	_, err := DiscoverVMService(dev, "com.example.app", "/tmp/test-flutter.sock")
 	if err == nil {
 		t.Error("expected error when forward fails")
 	}

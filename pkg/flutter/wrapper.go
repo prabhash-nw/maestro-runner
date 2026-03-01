@@ -1,6 +1,7 @@
 package flutter
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,87 +11,202 @@ import (
 	"github.com/devicelab-dev/maestro-runner/pkg/logger"
 )
 
-// FlutterDriver wraps an inner core.Driver and falls back to the Flutter VM Service
-// when the inner driver cannot find an element. Supports lazy connection — the
-// client may be nil initially and will be discovered on first fallback attempt.
+const (
+	// innerPollTimeout is the inner driver timeout per poll iteration (ms).
+	// Between each poll, we check if Flutter has found the element.
+	innerPollTimeout = 1000
+
+	// innerGraceTimeout is the inner driver timeout after Flutter finds the element (ms).
+	// Gives the inner driver one last chance — the element might still be painting.
+	innerGraceTimeout = 2000
+
+	// defaultFindTimeout is the fallback when no timeout is configured.
+	defaultFindTimeout = 17000
+)
+
+// FlutterDriver wraps an inner core.Driver and uses the Flutter VM Service
+// in parallel to find elements that the inner driver cannot see.
 //
-// Fallback chain: inner driver (UIAutomator2) → semantics tree → widget tree.
+// Parallel search: the inner driver polls in 1s increments while Flutter
+// continuously searches in a background goroutine. Between each inner driver
+// poll, we check if Flutter has found the element. If Flutter finds it, the
+// inner driver gets one last 2s chance, then we use Flutter's coordinates.
 type FlutterDriver struct {
-	inner     core.Driver
-	client    *VMServiceClient
-	dev       DeviceExecutor
-	appID     string
-	attempted bool // true after first discovery attempt (avoids retrying every step)
+	inner         core.Driver
+	client        *VMServiceClient
+	dev           DeviceExecutor
+	appID         string
+	socketPath    string // Unix socket path for VM Service forwarding
+	attempted     bool   // true after first discovery attempt (avoids retrying every step)
+	findTimeoutMs int    // current find timeout set by executor (0 = driver default)
 }
 
 // Wrap creates a FlutterDriver that wraps the given inner driver.
 // client may be nil — connection will be established lazily on first fallback.
-func Wrap(inner core.Driver, client *VMServiceClient, dev DeviceExecutor, appID string) core.Driver {
+// socketPath is the Unix socket used for adb forward (e.g., /tmp/<serial>-flutter.sock).
+func Wrap(inner core.Driver, client *VMServiceClient, dev DeviceExecutor, appID, socketPath string) core.Driver {
 	return &FlutterDriver{
-		inner:  inner,
-		client: client,
-		dev:    dev,
-		appID:  appID,
+		inner:      inner,
+		client:     client,
+		dev:        dev,
+		appID:      appID,
+		socketPath: socketPath,
 	}
 }
 
-// Execute runs the step on the inner driver first. If the inner driver returns an
-// element-not-found error for an element-finding step, it falls back to the Flutter
-// VM Service: first the semantics tree, then the widget tree.
+// Execute runs the step using parallel search: the inner driver polls in 1s increments
+// while Flutter continuously searches in a background goroutine. Between each inner
+// driver poll, we check if Flutter has found the element. This gives ~1s reaction time
+// to whichever side finds the element first.
 func (d *FlutterDriver) Execute(step flow.Step) *core.CommandResult {
 	// After launchApp, the app restarts — invalidate connection so we re-discover
 	if _, ok := step.(*flow.LaunchAppStep); ok {
-		if d.client != nil {
-			d.client.Close()
-			d.client = nil
-		}
+		d.client.Close()
+		d.client = nil
 		d.attempted = false
+		return d.inner.Execute(step)
 	}
 
-	result := d.inner.Execute(step)
-	if result.Success {
-		return result
-	}
-
+	// Non-element-finding steps → inner only
 	if !isElementFindingStep(step) {
-		return result
-	}
-
-	if !isElementNotFoundError(result) {
-		return result
+		return d.inner.Execute(step)
 	}
 
 	sel := extractSelector(step)
-	if sel == nil || sel.IsEmpty() {
-		return result
+	if sel == nil || sel.IsEmpty() || (sel.Text == "" && sel.ID == "") {
+		return d.inner.Execute(step)
 	}
 
-	// Only attempt Flutter fallback for text/ID selectors
-	if sel.Text == "" && sel.ID == "" {
-		return result
+	// No Flutter available → inner only
+	if d.client == nil && d.attempted {
+		return d.inner.Execute(step)
 	}
 
-	logger.Info("Flutter fallback: attempting for %s (text=%q, id=%q)", step.Type(), sel.Text, sel.ID)
-
-	flutterResult := d.findViaFlutter(step, sel)
-	if flutterResult != nil {
-		return flutterResult
+	// Optional steps: inner driver uses its own optionalFindTimeout internally
+	// which ignores SetFindTimeout. Skip parallel loop for these.
+	if step.IsOptional() {
+		return d.inner.Execute(step)
 	}
 
-	logger.Info("Flutter fallback: element not found in Flutter VM service")
+	effectiveTimeout := d.findTimeoutMs
+	if effectiveTimeout <= 0 {
+		effectiveTimeout = defaultFindTimeout
+	}
+
+	// --- Parallel search: inner driver (1s polls) + Flutter (continuous goroutine) ---
+
+	// Start Flutter polling in background goroutine
+	searchCtx, searchCancel := context.WithTimeout(context.Background(), time.Duration(effectiveTimeout)*time.Millisecond)
+	flutterCh := make(chan *flutterSearchResult, 1)
+	go d.flutterPollLoop(searchCtx, sel, flutterCh)
+
+	// Inner driver polls in 1s increments, checking Flutter between each
+	logger.Debug("Flutter: parallel search (text=%q, id=%q)", sel.Text, sel.ID)
+	deadline := time.Now().Add(time.Duration(effectiveTimeout) * time.Millisecond)
+	var result *core.CommandResult
+
+	for time.Now().Before(deadline) {
+		d.inner.SetFindTimeout(innerPollTimeout)
+		result = d.inner.Execute(step)
+
+		if result.Success {
+			searchCancel()
+			<-flutterCh // drain — ensure goroutine exits before next Execute
+			d.inner.SetFindTimeout(d.findTimeoutMs)
+			return result
+		}
+
+		// Non-element-not-found error (network, crash) → stop immediately
+		if !isElementNotFoundError(result) {
+			searchCancel()
+			<-flutterCh
+			d.inner.SetFindTimeout(d.findTimeoutMs)
+			return result
+		}
+
+		// Check if Flutter found the element
+		select {
+		case fr := <-flutterCh:
+			d.inner.SetFindTimeout(d.findTimeoutMs)
+			if fr == nil {
+				// Flutter gave up (connection error, etc.) — continue inner-only
+				searchCancel()
+				// Run inner driver with remaining time
+				remaining := int(time.Until(deadline).Milliseconds())
+				if remaining > innerPollTimeout {
+					d.inner.SetFindTimeout(remaining)
+					result = d.inner.Execute(step)
+					d.inner.SetFindTimeout(d.findTimeoutMs)
+				}
+				return result
+			}
+			// Flutter found it! Give inner driver one last chance (element might be painting)
+			logger.Info("Flutter: found element (node #%d at %d,%d), giving inner driver last chance", fr.node.ID, fr.cx, fr.cy)
+			searchCancel()
+			d.inner.SetFindTimeout(innerGraceTimeout)
+			result = d.inner.Execute(step)
+			d.inner.SetFindTimeout(d.findTimeoutMs)
+			if result.Success {
+				return result
+			}
+			// Inner truly can't see it → use Flutter coordinates
+			return d.executeFlutterResult(step, fr)
+		default:
+			// Flutter still searching, continue loop
+		}
+	}
+
+	// Inner driver exhausted timeout — wait for Flutter's final answer
+	searchCancel()
+	fr := <-flutterCh
+	d.inner.SetFindTimeout(d.findTimeoutMs)
+
+	if fr != nil {
+		logger.Info("Flutter: found element after inner timeout (node #%d at %d,%d)", fr.node.ID, fr.cx, fr.cy)
+		return d.executeFlutterResult(step, fr)
+	}
+
+	// Both failed
 	return result
 }
 
-// findViaFlutter attempts to find and interact with an element via the Flutter VM Service.
-// It tries the semantics tree first, then falls back to the widget tree for cross-referencing.
-func (d *FlutterDriver) findViaFlutter(step flow.Step, sel *flow.Selector) *core.CommandResult {
-	dump, err := d.getSemanticsTreeWithReconnect()
+// flutterPollLoop continuously searches the Flutter VM Service trees until the
+// element is found, the context is cancelled, or the timeout expires.
+// Runs in a goroutine — always writes exactly one result to ch before returning.
+func (d *FlutterDriver) flutterPollLoop(ctx context.Context, sel *flow.Selector, ch chan<- *flutterSearchResult) {
+	for {
+		select {
+		case <-ctx.Done():
+			ch <- nil
+			return
+		default:
+		}
+
+		if fr := d.searchFlutterOnce(sel); fr != nil {
+			ch <- fr
+			return
+		}
+	}
+}
+
+// flutterSearchResult holds the element location found via Flutter VM Service.
+type flutterSearchResult struct {
+	node       *SemanticsNode
+	bounds     core.Bounds
+	cx, cy     int
+	isSuffix   bool
+	pixelRatio float64
+}
+
+// searchFlutterOnce does a single search attempt across semantics and widget trees.
+func (d *FlutterDriver) searchFlutterOnce(sel *flow.Selector) *flutterSearchResult {
+	semanticsDump, widgetDump, err := d.getFlutterTrees(true)
 	if err != nil {
-		logger.Debug("Flutter fallback: failed to get semantics tree: %v", err)
+		logger.Debug("Flutter fallback: failed to get trees: %v", err)
 		return nil
 	}
 
-	root, pixelRatio, err := ParseSemanticsTree(dump)
+	root, pixelRatio, err := ParseSemanticsTree(semanticsDump)
 	if err != nil {
 		logger.Debug("Flutter fallback: failed to parse semantics tree: %v", err)
 		return nil
@@ -100,12 +216,21 @@ func (d *FlutterDriver) findViaFlutter(step flow.Step, sel *flow.Selector) *core
 	nodes := searchSemanticsTree(root, sel)
 	isSuffix := false
 
-	// Step 2: If not found in semantics tree, try widget tree cross-reference
-	if len(nodes) == 0 {
-		var wtMatch *WidgetTreeMatch
-		nodes, wtMatch = d.searchViaWidgetTree(root, sel)
-		if wtMatch != nil {
-			isSuffix = wtMatch.IsSuffix
+	// Step 2: If not found, try widget tree cross-reference
+	if len(nodes) == 0 && widgetDump != "" {
+		logger.Debug("Flutter fallback: searching widget tree (%d bytes)", len(widgetDump))
+		var match *WidgetTreeMatch
+		if sel.Text != "" {
+			match = SearchWidgetTreeForText(widgetDump, sel.Text)
+		}
+		if match == nil && sel.ID != "" {
+			match = SearchWidgetTreeForID(widgetDump, sel.ID)
+		}
+		if match != nil {
+			logger.Debug("Flutter fallback: widget tree match (type=%s, label=%q, nearbyText=%q, suffix=%v)",
+				match.MatchType, match.LabelText, match.NearbyText, match.IsSuffix)
+			isSuffix = match.IsSuffix
+			nodes = match.CrossReferenceWithSemantics(root)
 		}
 	}
 
@@ -118,29 +243,105 @@ func (d *FlutterDriver) findViaFlutter(step flow.Step, sel *flow.Selector) *core
 	bounds := node.Rect.ToBounds(pixelRatio)
 	cx, cy := bounds.Center()
 
-	// For suffix icons merged into a TextField, the suffix's a11y node only
-	// appears when the TextField is focused. Tap the center first to focus,
-	// then tap the suffix icon position (24dp icon at the right edge).
-	if isSuffix {
-		rightEdge := int(node.Rect.Right * pixelRatio)
-		cx = rightEdge - int(12*pixelRatio) // center of 24dp icon at right edge
+	return &flutterSearchResult{
+		node:       node,
+		bounds:     bounds,
+		cx:         cx,
+		cy:         cy,
+		isSuffix:   isSuffix,
+		pixelRatio: pixelRatio,
+	}
+}
+
+// getFlutterTrees fetches the semantics tree (and optionally widget tree).
+// If the client is broken, attempts reconnection once.
+func (d *FlutterDriver) getFlutterTrees(needWidgetTree bool) (semanticsDump, widgetDump string, err error) {
+	if d.client == nil {
+		if err := d.tryReconnect(); err != nil {
+			return "", "", err
+		}
+		if d.client == nil {
+			return "", "", fmt.Errorf("no flutter client")
+		}
+	}
+
+	semanticsDump, err = d.client.GetSemanticsTree()
+	if err != nil {
+		// Connection might be broken — try reconnecting once
+		logger.Debug("Flutter fallback: semantics tree error, reconnecting: %v", err)
+		if reconnErr := d.tryReconnect(); reconnErr != nil {
+			return "", "", fmt.Errorf("connection lost: %w", err)
+		}
+		if d.client == nil {
+			return "", "", fmt.Errorf("reconnection produced nil client")
+		}
+		semanticsDump, err = d.client.GetSemanticsTree()
+		if err != nil {
+			return "", "", err
+		}
+	}
+
+	if needWidgetTree {
+		widgetDump, _ = d.client.GetWidgetTree() // best-effort
+	}
+
+	return semanticsDump, widgetDump, nil
+}
+
+// tryReconnect attempts to re-establish the VM Service connection.
+func (d *FlutterDriver) tryReconnect() error {
+	if d.client != nil {
+		d.client.Close()
+		d.client = nil
+	}
+
+	if d.dev == nil {
+		return fmt.Errorf("no device executor")
+	}
+
+	token, err := DiscoverVMService(d.dev, d.appID, d.socketPath)
+	if err != nil {
+		return fmt.Errorf("discovery failed: %w", err)
+	}
+	if token == "" {
+		return fmt.Errorf("no Flutter VM service found")
+	}
+
+	client, err := ConnectUnix(d.socketPath, token)
+	if err != nil {
+		return fmt.Errorf("connect failed: %w", err)
+	}
+
+	d.client = client
+	d.attempted = true
+	logger.Info("Flutter VM service reconnected")
+	return nil
+}
+
+// executeFlutterResult takes a Flutter search result and executes the action.
+func (d *FlutterDriver) executeFlutterResult(step flow.Step, fr *flutterSearchResult) *core.CommandResult {
+	cx, cy := fr.cx, fr.cy
+
+	if fr.isSuffix {
+		rightEdge := int(fr.node.Rect.Right * fr.pixelRatio)
+		cx = rightEdge - int(12*fr.pixelRatio)
 
 		// Pre-focus: tap center of the TextField so the suffix becomes tappable
 		switch step.(type) {
 		case *flow.TapOnStep, *flow.DoubleTapOnStep, *flow.LongPressOnStep:
-			centerX, centerY := bounds.Center()
+			centerX, centerY := fr.bounds.Center()
 			focusTap := &flow.TapOnPointStep{X: centerX, Y: centerY}
 			focusTap.StepType = flow.StepTapOnPoint
 			d.inner.Execute(focusTap)
 			time.Sleep(500 * time.Millisecond)
 		}
 
-		logger.Info("Flutter fallback: suffix icon — targeting right edge (node #%d at %d,%d)", node.ID, cx, cy)
+		logger.Info("Flutter fallback: suffix icon — targeting right edge (node #%d at %d,%d)", fr.node.ID, cx, cy)
 	} else {
-		logger.Info("Flutter fallback: found element (node #%d at %d,%d)", node.ID, cx, cy)
+		logger.Info("Flutter fallback: executing at coordinates (node #%d at %d,%d)", fr.node.ID, cx, cy)
 	}
 
-	return d.executeWithCoordinates(step, node, cx, cy, bounds)
+	return d.executeWithCoordinates(step, fr.node, cx, cy, fr.bounds)
 }
 
 // searchSemanticsTree searches the parsed semantics tree for matching nodes.
@@ -162,42 +363,6 @@ func searchSemanticsTree(root *SemanticsNode, sel *flow.Selector) []*SemanticsNo
 		}
 	}
 	return nodes
-}
-
-// searchViaWidgetTree gets the widget tree and cross-references findings with
-// the semantics tree to get coordinates. Returns matching nodes and the widget tree match info.
-func (d *FlutterDriver) searchViaWidgetTree(root *SemanticsNode, sel *flow.Selector) ([]*SemanticsNode, *WidgetTreeMatch) {
-	if d.client == nil {
-		return nil, nil
-	}
-
-	widgetDump, err := d.client.GetWidgetTree()
-	if err != nil {
-		logger.Debug("Flutter fallback: failed to get widget tree: %v", err)
-		return nil, nil
-	}
-
-	logger.Info("Flutter fallback: searching widget tree (%d bytes)", len(widgetDump))
-
-	// Search widget tree for text (hintText) or identifier
-	var match *WidgetTreeMatch
-	if sel.Text != "" {
-		match = SearchWidgetTreeForText(widgetDump, sel.Text)
-	}
-	if match == nil && sel.ID != "" {
-		match = SearchWidgetTreeForID(widgetDump, sel.ID)
-	}
-
-	if match == nil {
-		logger.Debug("Flutter fallback: text/id not found in widget tree either")
-		return nil, nil
-	}
-
-	logger.Info("Flutter fallback: found in widget tree (type=%s, label=%q, nearbyText=%q, suffix=%v)",
-		match.MatchType, match.LabelText, match.NearbyText, match.IsSuffix)
-
-	// Cross-reference with semantics tree for coordinates
-	return match.CrossReferenceWithSemantics(root), match
 }
 
 // executeWithCoordinates dispatches the step using the element's coordinates.
@@ -238,24 +403,12 @@ func (d *FlutterDriver) executeWithCoordinates(step flow.Step, node *SemanticsNo
 		return d.inner.Execute(tapStep)
 
 	case *flow.AssertVisibleStep:
-		_ = s
 		return core.SuccessResult(
 			fmt.Sprintf("Element found via Flutter VM service (node #%d)", node.ID),
 			elemInfo,
 		)
 
-	case *flow.InputTextStep:
-		// Tap to focus the element first
-		tapStep := &flow.TapOnPointStep{X: cx, Y: cy}
-		tapStep.StepType = flow.StepTapOnPoint
-		tapResult := d.inner.Execute(tapStep)
-		if !tapResult.Success {
-			return tapResult
-		}
-		return d.inner.Execute(step)
-
-	case *flow.CopyTextFromStep:
-		_ = s
+	case *flow.InputTextStep, *flow.CopyTextFromStep:
 		tapStep := &flow.TapOnPointStep{X: cx, Y: cy}
 		tapStep.StepType = flow.StepTapOnPoint
 		tapResult := d.inner.Execute(tapStep)
@@ -265,63 +418,14 @@ func (d *FlutterDriver) executeWithCoordinates(step flow.Step, node *SemanticsNo
 		return d.inner.Execute(step)
 	}
 
-	return nil
+	// Unreachable: isElementFindingStep filters the same types handled above.
+	return core.ErrorResult(fmt.Errorf("unsupported step type for Flutter fallback: %T", step), "")
 }
 
-// ensureConnected establishes or re-establishes the VM Service connection.
-func (d *FlutterDriver) ensureConnected() error {
-	if d.client != nil {
-		return nil
-	}
-
-	wsURL, err := DiscoverVMService(d.dev, d.appID)
-	if err != nil {
-		return fmt.Errorf("discovery failed: %w", err)
-	}
-	if wsURL == "" {
-		return fmt.Errorf("no Flutter VM service found")
-	}
-
-	client, err := Connect(wsURL)
-	if err != nil {
-		return fmt.Errorf("connect failed: %w", err)
-	}
-
-	d.client = client
-	logger.Info("Flutter VM service connected (lazy)")
-	return nil
-}
-
-// getSemanticsTreeWithReconnect gets the semantics tree, attempting reconnection once on failure.
-func (d *FlutterDriver) getSemanticsTreeWithReconnect() (string, error) {
-	// Lazy connect on first use
-	if d.client == nil {
-		if d.attempted {
-			return "", fmt.Errorf("Flutter VM service not available (already attempted)")
-		}
-		d.attempted = true
-		if err := d.ensureConnected(); err != nil {
-			logger.Debug("Flutter fallback: lazy connect failed: %v", err)
-			return "", err
-		}
-	}
-
-	dump, err := d.client.GetSemanticsTree()
-	if err == nil {
-		return dump, nil
-	}
-
-	// Attempt reconnection (app may have restarted via launchApp clearState)
-	logger.Debug("Flutter fallback: reconnecting VM service after error: %v", err)
+// Close closes the VM Service client if connected.
+func (d *FlutterDriver) Close() {
 	d.client.Close()
 	d.client = nil
-	d.attempted = false // Allow re-discovery after app restart
-
-	if err := d.ensureConnected(); err != nil {
-		return "", fmt.Errorf("reconnect failed: %w", err)
-	}
-
-	return d.client.GetSemanticsTree()
 }
 
 // isElementFindingStep returns true for step types that involve finding an element.
@@ -373,21 +477,16 @@ func extractSelector(step flow.Step) *flow.Selector {
 	return nil
 }
 
-// Close closes the VM Service client if connected.
-func (d *FlutterDriver) Close() {
-	if d.client != nil {
-		d.client.Close()
-		d.client = nil
-	}
-}
-
 // --- Pass-through methods ---
 
 func (d *FlutterDriver) Screenshot() ([]byte, error)       { return d.inner.Screenshot() }
 func (d *FlutterDriver) Hierarchy() ([]byte, error)         { return d.inner.Hierarchy() }
 func (d *FlutterDriver) GetState() *core.StateSnapshot      { return d.inner.GetState() }
 func (d *FlutterDriver) GetPlatformInfo() *core.PlatformInfo { return d.inner.GetPlatformInfo() }
-func (d *FlutterDriver) SetFindTimeout(ms int)              { d.inner.SetFindTimeout(ms) }
+func (d *FlutterDriver) SetFindTimeout(ms int) {
+	d.findTimeoutMs = ms
+	d.inner.SetFindTimeout(ms)
+}
 func (d *FlutterDriver) SetWaitForIdleTimeout(ms int) error {
 	return d.inner.SetWaitForIdleTimeout(ms)
 }

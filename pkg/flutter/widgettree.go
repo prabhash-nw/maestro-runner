@@ -111,11 +111,10 @@ func SearchWidgetTreeForID(dump string, searchID string) *WidgetTreeMatch {
 			continue
 		}
 
-		// Found the identifier. Look for nearby text content to cross-reference.
-		// Use 2000-char window — ElevatedButton/Card widget dumps can be verbose.
-		afterStart := idx[1]
-		afterEnd := min(len(dump), afterStart+2000)
-		afterContext := dump[afterStart:afterEnd]
+		// Found the identifier. Extract the entire subtree below it using
+		// indentation tracking — this is more robust than a fixed-char window
+		// since Material widget descriptions can consume 2000+ chars.
+		afterContext := extractSubtree(dump, idx[1])
 
 		beforeStart := max(0, idx[0]-500)
 		beforeContext := dump[beforeStart:idx[0]]
@@ -123,7 +122,7 @@ func SearchWidgetTreeForID(dump string, searchID string) *WidgetTreeMatch {
 		// Check if this identifier is inside a suffix:/suffixIcon: context
 		isSuffix := reWTSuffix.MatchString(beforeContext)
 
-		// Look forward for Text("...") child widget
+		// Look forward for Text("...") child widget in the subtree
 		if m := reWTText.FindStringSubmatch(afterContext); m != nil {
 			return &WidgetTreeMatch{
 				MatchType:  "identifier",
@@ -132,7 +131,7 @@ func SearchWidgetTreeForID(dump string, searchID string) *WidgetTreeMatch {
 			}
 		}
 
-		// Look forward for tooltip
+		// Look forward for tooltip in the subtree
 		if m := reWTTooltip.FindStringSubmatch(afterContext); m != nil {
 			return &WidgetTreeMatch{
 				MatchType:  "identifier",
@@ -159,6 +158,74 @@ func SearchWidgetTreeForID(dump string, searchID string) *WidgetTreeMatch {
 	}
 
 	return nil
+}
+
+// extractSubtree extracts the widget subtree text starting from pos.
+// Uses indentation tracking: finds the indentation level of the line containing pos,
+// then scans forward collecting all lines at deeper indentation (child widgets).
+// Stops when a line at the same or shallower indentation is found (sibling/parent).
+func extractSubtree(dump string, pos int) string {
+	// Find the start of the line containing pos
+	lineStart := strings.LastIndex(dump[:pos], "\n") + 1
+	identLine := dump[lineStart:]
+	if nlIdx := strings.Index(identLine, "\n"); nlIdx >= 0 {
+		identLine = identLine[:nlIdx]
+	}
+
+	// Get the indentation level of the identifier's widget line
+	baseIndent := widgetIndent(identLine)
+
+	// Scan forward from the end of this line
+	endOfLine := strings.Index(dump[pos:], "\n")
+	if endOfLine < 0 {
+		return dump[pos:]
+	}
+
+	scanStart := pos + endOfLine + 1
+	subtreeEnd := scanStart
+
+	for i := scanStart; i < len(dump); {
+		nlIdx := strings.Index(dump[i:], "\n")
+		var line string
+		if nlIdx < 0 {
+			line = dump[i:]
+			subtreeEnd = len(dump)
+			break
+		}
+		line = dump[i : i+nlIdx]
+
+		// Skip empty lines
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			i += nlIdx + 1
+			subtreeEnd = i
+			continue
+		}
+
+		// If this line's indentation is at or shallower than our identifier,
+		// we've left the subtree — stop.
+		lineIndent := widgetIndent(line)
+		if lineIndent <= baseIndent {
+			break
+		}
+
+		subtreeEnd = i + nlIdx + 1
+		i = subtreeEnd
+	}
+
+	return dump[pos:subtreeEnd]
+}
+
+// widgetIndent returns the indentation level of a widget tree line.
+// Counts leading box-drawing characters (│├└─╎╏┊┆) and spaces.
+func widgetIndent(line string) int {
+	for i, ch := range line {
+		if ch != ' ' && ch != '│' && ch != '├' && ch != '└' && ch != '─' &&
+			ch != '╎' && ch != '╏' && ch != '┊' && ch != '┆' && ch != '║' {
+			return i
+		}
+	}
+	return len(line)
 }
 
 // CrossReferenceWithSemantics finds semantics nodes that correspond to the

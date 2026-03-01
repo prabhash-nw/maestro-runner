@@ -10,15 +10,15 @@ import (
 // device.AndroidDevice satisfies this interface.
 type DeviceExecutor interface {
 	Shell(cmd string) (string, error)
-	Forward(localPort, remotePort int) error
+	ForwardSocket(socketPath string, remotePort int) error
 }
 
 var reVMService = regexp.MustCompile(`The Dart VM service is listening on http://127\.0\.0\.1:(\d+)/([^\s/]+)/`)
 
-// DiscoverVMService finds the Flutter VM Service URL from device logcat.
-// Returns the WebSocket URL (ws://127.0.0.1:<port>/<token>/ws) and sets up adb port forwarding.
+// DiscoverVMService finds the Flutter VM Service from device logcat.
+// Sets up a Unix socket forward via socketPath and returns the VM service token.
 // Returns ("", nil) if no Flutter VM Service is found (not a Flutter app).
-func DiscoverVMService(dev DeviceExecutor, appID string) (wsURL string, err error) {
+func DiscoverVMService(dev DeviceExecutor, appID, socketPath string) (token string, err error) {
 	// Read Flutter logcat entries
 	out, err := dev.Shell("logcat -d -s flutter")
 	if err != nil {
@@ -45,10 +45,10 @@ func DiscoverVMService(dev DeviceExecutor, appID string) (wsURL string, err erro
 		port = port*10 + int(ch-'0')
 	}
 
-	// Set up adb port forwarding so host can connect
-	if err := dev.Forward(port, port); err != nil {
-		return "", fmt.Errorf("adb forward port %d: %w", port, err)
+	// Set up Unix socket forward — no port collision across devices
+	if err := dev.ForwardSocket(socketPath, port); err != nil {
+		return "", fmt.Errorf("socket forward port %d: %w", port, err)
 	}
 
-	return fmt.Sprintf("ws://127.0.0.1:%d/%s/ws", port, lastToken), nil
+	return lastToken, nil
 }
