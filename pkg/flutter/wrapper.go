@@ -36,7 +36,9 @@ type FlutterDriver struct {
 	client        *VMServiceClient
 	dev           DeviceExecutor
 	appID         string
-	socketPath    string // Unix socket path for VM Service forwarding
+	socketPath    string // Unix socket path for VM Service forwarding (Android)
+	udid          string // iOS simulator UDID (empty for Android)
+	isIOS         bool   // true = iOS reconnection path
 	attempted     bool   // true after first discovery attempt (avoids retrying every step)
 	findTimeoutMs int    // current find timeout set by executor (0 = driver default)
 }
@@ -51,6 +53,19 @@ func Wrap(inner core.Driver, client *VMServiceClient, dev DeviceExecutor, appID,
 		dev:        dev,
 		appID:      appID,
 		socketPath: socketPath,
+	}
+}
+
+// WrapIOS creates a FlutterDriver for iOS simulators.
+// client may be nil — connection will be established lazily on first fallback.
+// No port forwarding needed — the VM Service listens on localhost directly.
+func WrapIOS(inner core.Driver, client *VMServiceClient, udid, appID string) core.Driver {
+	return &FlutterDriver{
+		inner: inner,
+		client: client,
+		appID:  appID,
+		udid:   udid,
+		isIOS:  true,
 	}
 }
 
@@ -212,6 +227,12 @@ func (d *FlutterDriver) searchFlutterOnce(sel *flow.Selector) *flutterSearchResu
 		return nil
 	}
 
+	// iOS WDA uses points (logical pixels), not physical pixels.
+	// Flutter's Rect is already in logical pixels, so skip the pixelRatio scaling.
+	if d.isIOS {
+		pixelRatio = 1.0
+	}
+
 	// Step 1: Search semantics tree directly
 	nodes := searchSemanticsTree(root, sel)
 	isSuffix := false
@@ -295,6 +316,14 @@ func (d *FlutterDriver) tryReconnect() error {
 		d.client = nil
 	}
 
+	if d.isIOS {
+		return d.tryReconnectIOS()
+	}
+	return d.tryReconnectAndroid()
+}
+
+// tryReconnectAndroid discovers and connects via Unix socket (adb forward).
+func (d *FlutterDriver) tryReconnectAndroid() error {
 	if d.dev == nil {
 		return fmt.Errorf("no device executor")
 	}
@@ -314,7 +343,28 @@ func (d *FlutterDriver) tryReconnect() error {
 
 	d.client = client
 	d.attempted = true
-	logger.Info("Flutter VM service reconnected")
+	logger.Info("Flutter VM service reconnected (Android)")
+	return nil
+}
+
+// tryReconnectIOS discovers and connects via direct TCP (simulator localhost).
+func (d *FlutterDriver) tryReconnectIOS() error {
+	wsURL, err := DiscoverVMServiceIOS(d.udid)
+	if err != nil {
+		return fmt.Errorf("iOS discovery failed: %w", err)
+	}
+	if wsURL == "" {
+		return fmt.Errorf("no Flutter VM service found")
+	}
+
+	client, err := Connect(wsURL)
+	if err != nil {
+		return fmt.Errorf("connect failed: %w", err)
+	}
+
+	d.client = client
+	d.attempted = true
+	logger.Info("Flutter VM service reconnected (iOS)")
 	return nil
 }
 

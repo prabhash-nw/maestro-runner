@@ -12,6 +12,7 @@ import (
 	"github.com/danielpaulus/go-ios/ios/zipconduit"
 	"github.com/devicelab-dev/maestro-runner/pkg/core"
 	wdadriver "github.com/devicelab-dev/maestro-runner/pkg/driver/wda"
+	"github.com/devicelab-dev/maestro-runner/pkg/flutter"
 	"github.com/devicelab-dev/maestro-runner/pkg/logger"
 )
 
@@ -151,11 +152,27 @@ func CreateIOSDriver(cfg *RunConfig) (core.Driver, func(), error) {
 	}
 
 	// 9. Create driver
-	driver := wdadriver.NewDriver(client, platformInfo, udid)
-	driver.SetAppFile(cfg.AppFile)
+	wdaDrv := wdadriver.NewDriver(client, platformInfo, udid)
+	wdaDrv.SetAppFile(cfg.AppFile)
+
 	// Cleanup function
 	cleanup := func() {
 		runner.Cleanup()
+	}
+
+	var driver core.Driver = wdaDrv
+
+	// 10. Wrap driver with Flutter VM Service fallback (simulator only)
+	if !cfg.NoFlutterFallback && isSimulator {
+		fw := flutter.WrapIOS(wdaDrv, nil, udid, cfg.AppID)
+		driver = fw
+		origCleanup := cleanup
+		cleanup = func() {
+			if fd, ok := fw.(*flutter.FlutterDriver); ok {
+				fd.Close()
+			}
+			origCleanup()
+		}
 	}
 
 	return driver, cleanup, nil
