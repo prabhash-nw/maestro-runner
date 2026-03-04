@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `assertVisible` optional timeout and optimized tap element finding
 - WDA `launchApp` optimized: parallel permissions and removed sleeps
 - Element finding consolidated: single query with prefetched element name, merged WDA session settings into single HTTP call
+- Android `setAirplaneMode`/`toggleAirplaneMode` failed with `SecurityException: Permission Denial` on Android 7+ — `am broadcast` requires system-level permissions. Now uses `cmd connectivity airplane-mode` on Android 11+ (no root needed), with `settings put` + broadcast fallback for older versions ([#27](https://github.com/devicelab-dev/maestro-runner/issues/27))
 
 ### Contributors
 
@@ -98,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [@wrench7](https://github.com/wrench7)
 1. Reported `setAirplaneMode` scalar syntax parsing issue ([#27](https://github.com/devicelab-dev/maestro-runner/issues/27))
+2. Reported `setAirplaneMode` broadcast permission denied on Android 7+ ([#27](https://github.com/devicelab-dev/maestro-runner/issues/27))
 
 [@AkashRajvanshi](https://github.com/AkashRajvanshi)
 1. Reported regex pattern support for ID selectors ([#22](https://github.com/devicelab-dev/maestro-runner/issues/22))
