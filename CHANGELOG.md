@@ -7,9 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Flutter VM Service fallback for element finding — when the native driver (WDA/UIAutomator2) can't find a Flutter element, automatically discovers the Dart VM Service and searches the semantics/widget trees in parallel. Works on Android and iOS simulators. Non-Flutter apps pay only one log read on first miss, then fully bypassed. Disable with `--no-flutter-fallback`
+- Flutter widget tree cross-reference — when semantics tree search fails, falls back to widget tree analysis (hint text, identifiers, suffix icons) and cross-references with semantics nodes for coordinates
+- DeviceLab Android driver — WebSocket-based on-device automation with bounds stabilization for animated elements and special character handling. ~2x faster than UIAutomator2
+  ```bash
+  maestro-runner --driver devicelab --platform android test flow.yaml
+  ```
+- `setAirplaneMode` and `toggleAirplaneMode` commands for iOS (WDA) — automates the Settings app to toggle airplane mode on real devices. Supports both mapping and scalar syntax
+  ```yaml
+  # Mapping syntax
+  - setAirplaneMode:
+      enabled: true
+
+  # Scalar syntax
+  - setAirplaneMode: enabled
+  - setAirplaneMode: disabled
+
+  # Toggle (flips current state)
+  - toggleAirplaneMode
+  ```
+- `maxTypingFrequency` support for WDA (iOS) — configurable typing speed via `--typing-frequency` flag. Default: 30 keys/sec (WDA default is 60). Useful for React Native apps where the JS bridge can't keep up at full speed
+  ```bash
+  maestro-runner --typing-frequency 15 test flow.yaml
+  ```
+  ```yaml
+  # Or set per-flow in YAML config section:
+  appId: com.example.app
+  typingFrequency: 20
+  ---
+  - inputText: "hello world"
+  ```
+- `maxScrolls` and `timeout` fields wired up in `scrollUntilVisible` for all 4 drivers — previously parsed but ignored, now each driver uses dual-condition loop (max scrolls AND timeout)
+  ```yaml
+  - scrollUntilVisible:
+      element:
+        text: "Sign Out"
+      direction: "down"
+      maxScrolls: 5
+      timeout: 10000
+  ```
+- On-failure WebView detection with CDP-aware error enrichment — background CDP socket monitor with push event architecture
+- Regex pattern support for ID selectors across all drivers — use regex patterns like wildcards, alternation, and character classes in `id` selectors
+  ```yaml
+  # Wildcard
+  - tapOn:
+      id: "username-.*"
+
+  # Alternation
+  - assertVisible:
+      id: "(username|email)-input"
+
+  # Suffix anchor
+  - tapOn:
+      id: "login.*-button$"
+  ```
+- `repeat` with `while` condition now loops correctly instead of executing only once. Supports configurable timeout for the condition check
+  ```yaml
+  - repeat:
+      while:
+        visible: "Delete"
+        timeout: 2000    # ms to wait before declaring element gone
+      commands:
+        - tapOn: "Delete"
+  ```
+- Cloud Providers section in README with TestingBot setup guide
+
 ### Fixed
 - `runFlow: when` conditions with variable expressions (e.g., `${output.element.id}`) were never expanded, causing conditions to always evaluate as false and silently skip conditional blocks
 - iOS real device: `acceptAlertButtonSelector` matched "Don't Allow" instead of "Allow" — `CONTAINS[c] 'Allow'` matched both buttons, causing WDA to reject permission dialogs. Changed to `BEGINSWITH[c] 'Allow'` with `OK` fallback for older iOS versions
+- `AllocatePort` was ignoring existing port allocations and `assertCondition` had duplicate `timeout` yaml tag
+- `repeat` with `while` condition executed only once instead of looping
+- `repeat-while` condition check timeout reduced from 17s to 7s default
+- Implicit wait warning resolved by using Appium settings endpoint
+- `assertVisible` optional timeout and optimized tap element finding
+- WDA `launchApp` optimized: parallel permissions and removed sleeps
+- Element finding consolidated: single query with prefetched element name, merged WDA session settings into single HTTP call
+
+### Contributors
+
+[@gdealmeida1885](https://github.com/gdealmeida1885)
+1. Fixed variable expansion in `runFlow` `when` conditions ([#10](https://github.com/devicelab-dev/maestro-runner/pull/10))
+
+[@maggialejandro](https://github.com/maggialejandro)
+1. Fixed `acceptAlertButtonSelector` matching "Don't Allow" instead of "Allow" ([#24](https://github.com/devicelab-dev/maestro-runner/pull/24))
+
+[@7ammer](https://github.com/7ammer)
+1. Reported `repeat` with `while` condition executing only once ([#23](https://github.com/devicelab-dev/maestro-runner/issues/23))
+2. Reported implicit wait warning with Appium settings endpoint
+
+[@wrench7](https://github.com/wrench7)
+1. Reported `setAirplaneMode` scalar syntax parsing issue ([#27](https://github.com/devicelab-dev/maestro-runner/issues/27))
+
+[@AkashRajvanshi](https://github.com/AkashRajvanshi)
+1. Reported regex pattern support for ID selectors ([#22](https://github.com/devicelab-dev/maestro-runner/issues/22))
+
+[@jochen-testingbot](https://github.com/jochen-testingbot)
+1. Added TestingBot cloud provider documentation ([#20](https://github.com/devicelab-dev/maestro-runner/pull/20))
 
 ## [1.0.7] - 2026-02-20
 
