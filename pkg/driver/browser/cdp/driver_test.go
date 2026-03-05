@@ -3222,3 +3222,217 @@ func TestResultHelpers(t *testing.T) {
 		t.Errorf("unsupportedResult unexpected: %+v", ur)
 	}
 }
+
+// ============================================
+// Cookie & Auth State Tests
+// ============================================
+
+func TestSetCookies(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	step := &flow.SetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepSetCookies},
+		Cookies: []flow.CookieSpec{
+			{Name: "session", Value: "abc123", Domain: "127.0.0.1", Path: "/"},
+			{Name: "theme", Value: "dark", Domain: "127.0.0.1", Path: "/"},
+		},
+	}
+
+	result := d.Execute(step)
+	if !result.Success {
+		t.Fatalf("expected success, got error: %v", result.Error)
+	}
+	if !strings.Contains(result.Message, "2 cookie") {
+		t.Errorf("expected message about 2 cookies, got: %s", result.Message)
+	}
+}
+
+func TestSetCookiesEmpty(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	step := &flow.SetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepSetCookies},
+	}
+
+	result := d.Execute(step)
+	if result.Success {
+		t.Fatal("expected error for empty cookies")
+	}
+}
+
+func TestGetCookies(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// Set a cookie first
+	setStep := &flow.SetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepSetCookies},
+		Cookies: []flow.CookieSpec{
+			{Name: "test_cookie", Value: "hello", Domain: "127.0.0.1", Path: "/"},
+		},
+	}
+	d.Execute(setStep)
+
+	// Get cookies
+	getStep := &flow.GetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepGetCookies},
+		Output:   "cookies",
+	}
+	result := d.Execute(getStep)
+	if !result.Success {
+		t.Fatalf("expected success, got error: %v", result.Error)
+	}
+
+	data, ok := result.Data.(string)
+	if !ok || data == "" {
+		t.Fatal("expected non-empty JSON data")
+	}
+	if !strings.Contains(data, "test_cookie") || !strings.Contains(data, "hello") {
+		t.Errorf("expected cookie data in result, got: %s", data)
+	}
+}
+
+func TestSaveAndLoadAuthState(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	// Set up some state: cookie + localStorage
+	setStep := &flow.SetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepSetCookies},
+		Cookies: []flow.CookieSpec{
+			{Name: "auth_token", Value: "secret123", Domain: "127.0.0.1", Path: "/"},
+		},
+	}
+	d.Execute(setStep)
+
+	d.page.MustEval(`() => {
+		localStorage.setItem("user", "alice");
+		localStorage.setItem("lang", "en");
+		sessionStorage.setItem("tab", "home");
+	}`)
+
+	// Save auth state
+	tmpFile := t.TempDir() + "/auth-state.json"
+	saveStep := &flow.SaveAuthStateStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepSaveAuthState},
+		Path:     tmpFile,
+	}
+	result := d.Execute(saveStep)
+	if !result.Success {
+		t.Fatalf("saveAuthState failed: %v", result.Error)
+	}
+	if !strings.Contains(result.Message, "auth_token") || !strings.Contains(result.Message, "localStorage") {
+		// Just check it mentions counts
+		if !strings.Contains(result.Message, "cookie") {
+			t.Errorf("expected message with cookie info, got: %s", result.Message)
+		}
+	}
+
+	// Verify file was created
+	data, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("failed to read saved file: %v", err)
+	}
+	if !strings.Contains(string(data), "auth_token") {
+		t.Error("saved file should contain auth_token cookie")
+	}
+	if !strings.Contains(string(data), "alice") {
+		t.Error("saved file should contain localStorage user=alice")
+	}
+	if !strings.Contains(string(data), "home") {
+		t.Error("saved file should contain sessionStorage tab=home")
+	}
+
+	// Clear everything
+	d.clearAllState()
+
+	// Verify state is gone
+	lsCheck, _ := d.page.Eval(`() => localStorage.getItem("user") || ""`)
+	if lsCheck != nil && lsCheck.Value.Str() != "" {
+		t.Error("localStorage should be cleared")
+	}
+
+	// Load auth state
+	loadStep := &flow.LoadAuthStateStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepLoadAuthState},
+		Path:     tmpFile,
+	}
+	result = d.Execute(loadStep)
+	if !result.Success {
+		t.Fatalf("loadAuthState failed: %v", result.Error)
+	}
+
+	// Verify cookies were restored
+	getStep := &flow.GetCookiesStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepGetCookies},
+	}
+	cookieResult := d.Execute(getStep)
+	cookieData, _ := cookieResult.Data.(string)
+	if !strings.Contains(cookieData, "auth_token") {
+		t.Error("cookie auth_token should be restored")
+	}
+
+	// Verify localStorage was restored
+	lsVal, _ := d.page.Eval(`() => localStorage.getItem("user")`)
+	if lsVal == nil || lsVal.Value.Str() != "alice" {
+		t.Error("localStorage user should be restored to 'alice'")
+	}
+
+	// Verify sessionStorage was restored
+	ssVal, _ := d.page.Eval(`() => sessionStorage.getItem("tab")`)
+	if ssVal == nil || ssVal.Value.Str() != "home" {
+		t.Error("sessionStorage tab should be restored to 'home'")
+	}
+}
+
+func TestSaveAuthStateEmptyPath(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	step := &flow.SaveAuthStateStep{BaseStep: flow.BaseStep{StepType: flow.StepSaveAuthState}}
+	result := d.Execute(step)
+	if result.Success {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestLoadAuthStateEmptyPath(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	step := &flow.LoadAuthStateStep{BaseStep: flow.BaseStep{StepType: flow.StepLoadAuthState}}
+	result := d.Execute(step)
+	if result.Success {
+		t.Fatal("expected error for empty path")
+	}
+}
+
+func TestLoadAuthStateMissingFile(t *testing.T) {
+	ts := newTestServer()
+	defer ts.Close()
+	d := newTestDriver(t, ts.URL)
+	defer d.Close()
+
+	step := &flow.LoadAuthStateStep{
+		BaseStep: flow.BaseStep{StepType: flow.StepLoadAuthState},
+		Path:     "/nonexistent/auth.json",
+	}
+	result := d.Execute(step)
+	if result.Success {
+		t.Fatal("expected error for missing file")
+	}
+}

@@ -393,6 +393,16 @@ func (d *Driver) Execute(step flow.Step) *core.CommandResult {
 	case *flow.EvalBrowserScriptStep:
 		result = d.evalBrowserScript(s)
 
+	// Browser state (cookies, auth)
+	case *flow.SetCookiesStep:
+		result = d.setCookies(s)
+	case *flow.GetCookiesStep:
+		result = d.getCookies(s)
+	case *flow.SaveAuthStateStep:
+		result = d.saveAuthState(s)
+	case *flow.LoadAuthStateStep:
+		result = d.loadAuthState(s)
+
 	// Unsupported — mobile-only or not applicable to web
 	case *flow.SetAirplaneModeStep, *flow.ToggleAirplaneModeStep:
 		result = unsupportedResult("airplane mode is not supported on web platform")

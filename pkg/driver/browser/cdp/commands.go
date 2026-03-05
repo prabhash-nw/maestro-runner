@@ -2,9 +2,12 @@ package cdp
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/big"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -780,6 +783,175 @@ func (d *Driver) evalBrowserScript(step *flow.EvalBrowserScriptStep) *core.Comma
 	result := successResult("evalBrowserScript completed", nil)
 	result.Data = val
 	return result
+}
+
+// setCookies sets browser cookies via CDP.
+func (d *Driver) setCookies(step *flow.SetCookiesStep) *core.CommandResult {
+	if len(step.Cookies) == 0 {
+		return errorResult(fmt.Errorf("setCookies: no cookies provided"), "")
+	}
+
+	params := make([]*proto.NetworkCookieParam, len(step.Cookies))
+	for i, c := range step.Cookies {
+		params[i] = &proto.NetworkCookieParam{
+			Name:     c.Name,
+			Value:    c.Value,
+			Domain:   c.Domain,
+			Path:     c.Path,
+			HTTPOnly: c.HTTPOnly,
+			Secure:   c.Secure,
+		}
+		if c.SameSite != "" {
+			params[i].SameSite = proto.NetworkCookieSameSite(c.SameSite)
+		}
+		if c.Expires > 0 {
+			params[i].Expires = proto.TimeSinceEpoch(c.Expires)
+		}
+	}
+
+	err := proto.NetworkSetCookies{Cookies: params}.Call(d.page)
+	if err != nil {
+		return errorResult(fmt.Errorf("setCookies: %w", err), "")
+	}
+
+	return successResult(fmt.Sprintf("Set %d cookie(s)", len(step.Cookies)), nil)
+}
+
+// getCookies retrieves all browser cookies and returns them as JSON.
+func (d *Driver) getCookies(step *flow.GetCookiesStep) *core.CommandResult {
+	res, err := proto.NetworkGetCookies{}.Call(d.page)
+	if err != nil {
+		return errorResult(fmt.Errorf("getCookies: %w", err), "")
+	}
+
+	data, err := json.Marshal(res.Cookies)
+	if err != nil {
+		return errorResult(fmt.Errorf("getCookies: failed to marshal: %w", err), "")
+	}
+
+	result := successResult(fmt.Sprintf("Got %d cookie(s)", len(res.Cookies)), nil)
+	result.Data = string(data)
+	return result
+}
+
+// authState is the JSON structure for saveAuthState/loadAuthState.
+type authState struct {
+	Cookies        []*proto.NetworkCookie `json:"cookies"`
+	LocalStorage   map[string]string      `json:"localStorage"`
+	SessionStorage map[string]string      `json:"sessionStorage"`
+}
+
+// getStorageItems reads all key-value pairs from localStorage or sessionStorage.
+func (d *Driver) getStorageItems(storageName string) map[string]string {
+	js := fmt.Sprintf(`() => {
+		const items = {};
+		for (let i = 0; i < %s.length; i++) {
+			const key = %s.key(i);
+			items[key] = %s.getItem(key);
+		}
+		return JSON.stringify(items);
+	}`, storageName, storageName, storageName)
+	obj, err := d.page.Eval(js)
+	items := map[string]string{}
+	if err == nil && obj != nil && obj.Value.Str() != "" {
+		_ = json.Unmarshal([]byte(obj.Value.Str()), &items)
+	}
+	return items
+}
+
+// setStorageItems writes key-value pairs into localStorage or sessionStorage.
+func (d *Driver) setStorageItems(storageName string, items map[string]string) error {
+	itemsJSON, _ := json.Marshal(items)
+	js := fmt.Sprintf(`(items) => {
+		const parsed = JSON.parse(items);
+		for (const [key, value] of Object.entries(parsed)) {
+			%s.setItem(key, value);
+		}
+	}`, storageName)
+	_, err := d.page.Eval(js, string(itemsJSON))
+	return err
+}
+
+// saveAuthState saves cookies + localStorage + sessionStorage to a JSON file.
+func (d *Driver) saveAuthState(step *flow.SaveAuthStateStep) *core.CommandResult {
+	if step.Path == "" {
+		return errorResult(fmt.Errorf("saveAuthState: path is required"), "")
+	}
+
+	// Get cookies
+	cookieRes, err := proto.NetworkGetCookies{}.Call(d.page)
+	if err != nil {
+		return errorResult(fmt.Errorf("saveAuthState: failed to get cookies: %w", err), "")
+	}
+
+	localStorage := d.getStorageItems("localStorage")
+	sessionStorage := d.getStorageItems("sessionStorage")
+
+	state := authState{
+		Cookies:        cookieRes.Cookies,
+		LocalStorage:   localStorage,
+		SessionStorage: sessionStorage,
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return errorResult(fmt.Errorf("saveAuthState: failed to marshal: %w", err), "")
+	}
+
+	if dir := filepath.Dir(step.Path); dir != "." {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return errorResult(fmt.Errorf("saveAuthState: failed to create directory: %w", err), "")
+		}
+	}
+
+	if err := os.WriteFile(step.Path, data, 0o600); err != nil {
+		return errorResult(fmt.Errorf("saveAuthState: failed to write file: %w", err), "")
+	}
+
+	return successResult(fmt.Sprintf("Saved auth state to %s (%d cookies, %d localStorage, %d sessionStorage)",
+		step.Path, len(cookieRes.Cookies), len(localStorage), len(sessionStorage)), nil)
+}
+
+// loadAuthState loads cookies + localStorage + sessionStorage from a JSON file.
+func (d *Driver) loadAuthState(step *flow.LoadAuthStateStep) *core.CommandResult {
+	if step.Path == "" {
+		return errorResult(fmt.Errorf("loadAuthState: path is required"), "")
+	}
+
+	data, err := os.ReadFile(step.Path)
+	if err != nil {
+		return errorResult(fmt.Errorf("loadAuthState: failed to read file: %w", err), "")
+	}
+
+	var state authState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return errorResult(fmt.Errorf("loadAuthState: failed to parse: %w", err), "")
+	}
+
+	// Set cookies
+	if len(state.Cookies) > 0 {
+		params := proto.CookiesToParams(state.Cookies)
+		if err := (proto.NetworkSetCookies{Cookies: params}).Call(d.page); err != nil {
+			return errorResult(fmt.Errorf("loadAuthState: failed to set cookies: %w", err), "")
+		}
+	}
+
+	// Set localStorage
+	if len(state.LocalStorage) > 0 {
+		if err := d.setStorageItems("localStorage", state.LocalStorage); err != nil {
+			log.Printf("[browser] loadAuthState: failed to set localStorage: %v", err)
+		}
+	}
+
+	// Set sessionStorage
+	if len(state.SessionStorage) > 0 {
+		if err := d.setStorageItems("sessionStorage", state.SessionStorage); err != nil {
+			log.Printf("[browser] loadAuthState: failed to set sessionStorage: %v", err)
+		}
+	}
+
+	return successResult(fmt.Sprintf("Loaded auth state from %s (%d cookies, %d localStorage, %d sessionStorage)",
+		step.Path, len(state.Cookies), len(state.LocalStorage), len(state.SessionStorage)), nil)
 }
 
 var firstNames = []string{"Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry"}

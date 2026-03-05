@@ -68,6 +68,12 @@ const (
 	StepEvalScript        StepType = "evalScript"
 	StepEvalBrowserScript StepType = "evalBrowserScript"
 
+	// Browser State (web-only)
+	StepSetCookies    StepType = "setCookies"
+	StepGetCookies    StepType = "getCookies"
+	StepSaveAuthState StepType = "saveAuthState"
+	StepLoadAuthState StepType = "loadAuthState"
+
 	// Media
 	StepTakeScreenshot StepType = "takeScreenshot"
 	StepStartRecording StepType = "startRecording"
@@ -493,6 +499,46 @@ type EvalBrowserScriptStep struct {
 	BaseStep `yaml:",inline"`
 	Script   string `yaml:"script"` // JS code to execute in the browser
 	Output   string `yaml:"output"` // Variable name to store the return value
+}
+
+// ============================================
+// Browser State Steps (web-only)
+// ============================================
+
+// CookieSpec represents a cookie to set.
+type CookieSpec struct {
+	Name     string  `yaml:"name"`
+	Value    string  `yaml:"value"`
+	Domain   string  `yaml:"domain"`
+	Path     string  `yaml:"path"`
+	HTTPOnly bool    `yaml:"httpOnly"`
+	Secure   bool    `yaml:"secure"`
+	SameSite string  `yaml:"sameSite"`
+	Expires  float64 `yaml:"expires"` // Unix timestamp
+}
+
+// SetCookiesStep sets browser cookies via CDP.
+type SetCookiesStep struct {
+	BaseStep `yaml:",inline"`
+	Cookies  []CookieSpec `yaml:"cookies"`
+}
+
+// GetCookiesStep retrieves browser cookies and stores them as JSON.
+type GetCookiesStep struct {
+	BaseStep `yaml:",inline"`
+	Output   string `yaml:"output"` // Variable name to store JSON result
+}
+
+// SaveAuthStateStep saves cookies + localStorage + sessionStorage to a JSON file.
+type SaveAuthStateStep struct {
+	BaseStep `yaml:",inline"`
+	Path     string `yaml:"path"` // Output file path
+}
+
+// LoadAuthStateStep loads cookies + localStorage + sessionStorage from a JSON file.
+type LoadAuthStateStep struct {
+	BaseStep `yaml:",inline"`
+	Path     string `yaml:"path"` // Input file path
 }
 
 // ============================================
