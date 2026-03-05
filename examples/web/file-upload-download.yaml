@@ -1,0 +1,26 @@
+# File Upload & Download
+# Upload files to input elements and wait for browser downloads.
+#
+# Run: maestro-runner --platform web test examples/web/file-upload-download.yaml
+
+- launchApp
+
+# Upload a single file
+- uploadFile:
+    css: "input[type=file]"
+    path: "test-data/photo.jpg"
+
+# Upload multiple files
+- uploadFile:
+    css: "#document-upload"
+    paths:
+      - "test-data/doc1.pdf"
+      - "test-data/doc2.pdf"
+
+# Click the export button, then wait for the download
+- tapOn:
+    id: "export-btn"
+- waitForDownload:
+    saveTo: "downloads/"
+    assertFilename: "report.pdf"
+    timeout: 15000

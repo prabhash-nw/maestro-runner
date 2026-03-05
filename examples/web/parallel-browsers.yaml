@@ -1,0 +1,19 @@
+# Parallel Browser Execution
+# Run test flows across N isolated browser instances simultaneously.
+# Each browser gets its own process, profile directory, and cookies.
+#
+# Run: maestro-runner --platform web --parallel 3 test examples/web/parallel-browsers.yaml
+#
+# This distributes flows across 3 browser workers (browser-1, browser-2, browser-3).
+# First run downloads Chromium once; subsequent runs reuse the cached binary.
+
+config:
+  url: "https://app.example.com"
+
+- launchApp
+- assertVisible:
+    text: "Welcome"
+- tapOn:
+    id: "login-btn"
+- assertVisible:
+    text: "Dashboard"

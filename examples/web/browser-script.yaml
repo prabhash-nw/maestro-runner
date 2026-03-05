@@ -1,0 +1,39 @@
+# Browser Script Execution
+# Run JavaScript directly in the browser page context via CDP.
+# Unlike evalScript (runs in Maestro's internal JS engine),
+# evalBrowserScript has access to window, document, DOM, fetch, etc.
+#
+# Run: maestro-runner --platform web test examples/web/browser-script.yaml
+
+- launchApp
+
+# Get the page title
+- evalBrowserScript:
+    script: "return document.title"
+    output: pageTitle
+
+# Use async/await (fetch API)
+- evalBrowserScript:
+    script: |
+      const resp = await fetch('/api/config');
+      const data = await resp.json();
+      return data.version
+    output: apiVersion
+
+# Manipulate localStorage
+- evalBrowserScript:
+    script: |
+      localStorage.setItem('onboarded', 'true');
+      return localStorage.getItem('onboarded')
+    output: onboardingFlag
+
+# Scroll to bottom of page
+- evalBrowserScript:
+    script: "window.scrollTo(0, document.body.scrollHeight)"
+
+# Get computed style
+- evalBrowserScript:
+    script: |
+      const el = document.querySelector('#header');
+      return getComputedStyle(el).backgroundColor
+    output: headerColor

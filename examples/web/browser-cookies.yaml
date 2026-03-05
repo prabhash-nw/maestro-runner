@@ -1,0 +1,28 @@
+# Browser Cookie Management
+# Set, get, and manage cookies for authentication flows.
+#
+# Run: maestro-runner --platform web test examples/web/browser-cookies.yaml
+
+- launchApp
+
+# Set authentication cookies before navigating
+- setCookies:
+    cookies:
+      - name: "session_id"
+        value: "abc123"
+        domain: ".example.com"
+        path: "/"
+        httpOnly: true
+        secure: true
+      - name: "theme"
+        value: "dark"
+        domain: ".example.com"
+        path: "/"
+
+# Read all cookies into a variable
+- getCookies: allCookies
+
+# Use evalBrowserScript to verify a specific cookie
+- evalBrowserScript:
+    script: "return document.cookie"
+    output: documentCookies

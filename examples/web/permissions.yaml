@@ -1,0 +1,24 @@
+# Browser Permissions
+# Grant or reset browser permissions (notifications, camera, geolocation, etc).
+#
+# Run: maestro-runner --platform web test examples/web/permissions.yaml
+
+- launchApp
+
+# Grant permissions before the page requests them
+- grantPermissions:
+    permissions:
+      - notifications
+      - geolocation
+      - audioCapture
+      - videoCapture
+      - clipboardReadWrite
+
+# Grant permissions for a specific origin only
+- grantPermissions:
+    permissions:
+      - notifications
+    origin: "https://app.example.com"
+
+# Reset all permissions to defaults
+- resetPermissions

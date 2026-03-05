@@ -1,0 +1,27 @@
+# Auth State Save & Load
+# Login once, save state, reuse across flows. Like Playwright's storageState.
+#
+# Run: maestro-runner --platform web test examples/web/auth-state.yaml
+
+- launchApp
+
+# Perform login
+- tapOn:
+    id: "email-input"
+- inputText: "user@example.com"
+- tapOn:
+    id: "password-input"
+- inputText: "password123"
+- tapOn:
+    id: "login-btn"
+
+# Wait for login to complete
+- assertVisible:
+    id: "dashboard"
+
+# Save auth state (cookies + localStorage + sessionStorage)
+- saveAuthState: auth-state.json
+
+# --- In another flow, restore the saved state ---
+# - loadAuthState: auth-state.json
+# - launchApp   # Now logged in without re-entering credentials
