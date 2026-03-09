@@ -70,17 +70,32 @@ func (d *Driver) getKeyboardBounds() *core.Bounds {
 	if d.device == nil {
 		return nil
 	}
+	// TODO: Check for other api versions as well
+	// Check mInputShown from dumpsys input_method (most reliable on all SDK levels).
+	// On SDK 36+, dumpsys window InputMethod no longer contains mInputShown.
+	if !d.isInputShown() {
+		return nil
+	}
 
 	output, err := d.device.Shell("dumpsys window InputMethod")
 	if err != nil {
 		return nil
 	}
 
-	if strings.Contains(output, "mInputShown=false") {
-		return nil
-	}
-
 	return parseKeyboardFrame(output)
+}
+
+// isInputShown checks mInputShown via "dumpsys input_method".
+// This is the canonical source for whether the soft keyboard is displayed.
+func (d *Driver) isInputShown() bool {
+	if d.device == nil {
+		return false
+	}
+	out, err := d.device.Shell("dumpsys input_method | grep mInputShown")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, "mInputShown=true")
 }
 
 // isKeyboardVisible checks if the soft keyboard is currently shown using dumpsys.

@@ -239,7 +239,7 @@ func isStepType(key string) bool {
 		StepOpenTab, StepSwitchTab, StepCloseTab,
 		StepMockNetwork, StepBlockNetwork, StepSetNetworkConditions, StepWaitForRequest, StepClearNetworkMocks,
 		StepTakeScreenshot, StepStartRecording,
-		StepStopRecording, StepAddMedia, StepPressKey, StepWaitForAnimationToEnd,
+		StepStopRecording, StepAddMedia, StepSleep, StepPressKey, StepWaitForAnimationToEnd,
 		StepDefineVariables:
 		return true
 	}
@@ -321,7 +321,16 @@ func decodeStep(stepType StepType, valueNode *yaml.Node, sourcePath string) (Ste
 		return &BackStep{BaseStep: BaseStep{StepType: stepType}}, nil
 
 	case StepHideKeyboard:
-		return &HideKeyboardStep{BaseStep: BaseStep{StepType: stepType}}, nil
+		var s HideKeyboardStep
+		if valueNode.Kind == yaml.ScalarNode {
+			s.Approach = valueNode.Value
+		} else if valueNode.Kind == yaml.MappingNode {
+			if err := valueNode.Decode(&s); err != nil {
+				return nil, wrapParseError(sourcePath, valueNode.Line, err)
+			}
+		}
+		s.StepType = stepType
+		return &s, nil
 
 	case StepAcceptAlert:
 		return &AcceptAlertStep{BaseStep: BaseStep{StepType: stepType}}, nil
@@ -843,6 +852,20 @@ func decodeStep(stepType StepType, valueNode *yaml.Node, sourcePath string) (Ste
 		var s PressKeyStep
 		if valueNode.Kind == yaml.ScalarNode {
 			s.Key = valueNode.Value
+		} else if err := valueNode.Decode(&s); err != nil {
+			return nil, wrapParseError(sourcePath, valueNode.Line, err)
+		}
+		s.StepType = stepType
+		return &s, nil
+
+	case StepSleep:
+		var s SleepStep
+		if valueNode.Kind == yaml.ScalarNode {
+			var ms int
+			if err := valueNode.Decode(&ms); err != nil {
+				return nil, wrapParseError(sourcePath, valueNode.Line, err)
+			}
+			s.DurationMs = ms
 		} else if err := valueNode.Decode(&s); err != nil {
 			return nil, wrapParseError(sourcePath, valueNode.Line, err)
 		}

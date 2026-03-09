@@ -341,12 +341,69 @@ func (d *Driver) eraseText(step *flow.EraseTextStep) *core.CommandResult {
 	return successResult(fmt.Sprintf("Erased %d characters", chars), nil)
 }
 
-func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
-	if err := d.client.HideKeyboard(); err != nil {
-		// Don't fail - keyboard may not be visible
-		return successResult("Hide keyboard (may not have been visible)", nil)
+func (d *Driver) hideKeyboard(step *flow.HideKeyboardStep) *core.CommandResult {
+	if !d.isInputShown() {
+		return successResult("Keyboard not visible, skipped", nil)
 	}
-	return successResult("Keyboard hidden", nil)
+
+	approach := strings.ToLower(strings.TrimSpace(step.Approach))
+
+	// If a specific approach is requested, use only that one.
+	switch approach {
+	case "appium":
+		return d.hideKeyboardAppium()
+	case "escape":
+		return d.hideKeyboardEscape()
+	case "back":
+		return d.hideKeyboardBack()
+	case "":
+		// Try all approaches in order.
+	default:
+		return errorResult(nil, fmt.Sprintf("Unknown hideKeyboard approach: %q (valid: appium, escape, back)", step.Approach))
+	}
+
+	// Try all approaches: Appium → ESCAPE → BACK
+	if r := d.hideKeyboardAppium(); r.Success {
+		return r
+	}
+	if r := d.hideKeyboardEscape(); r.Success {
+		return r
+	}
+	return d.hideKeyboardBack()
+}
+
+func (d *Driver) hideKeyboardAppium() *core.CommandResult {
+	_ = d.client.HideKeyboard()
+	time.Sleep(500 * time.Millisecond)
+	if !d.isInputShown() {
+		return successResult("Keyboard hidden via Appium endpoint", nil)
+	}
+	return errorResult(nil, "Appium endpoint failed to hide keyboard")
+}
+
+func (d *Driver) hideKeyboardEscape() *core.CommandResult {
+	if d.device == nil {
+		return errorResult(nil, "No device available for KEYCODE_ESCAPE")
+	}
+	_, _ = d.device.Shell("input keyevent 111")
+	time.Sleep(500 * time.Millisecond)
+	if !d.isInputShown() {
+		return successResult("Keyboard hidden via KEYCODE_ESCAPE", nil)
+	}
+	return errorResult(nil, "KEYCODE_ESCAPE failed to hide keyboard")
+}
+
+func (d *Driver) hideKeyboardBack() *core.CommandResult {
+	if d.device == nil {
+		return errorResult(nil, "No device available for BACK key")
+	}
+	// Safe: when keyboard IS visible, BACK dismisses it without navigating
+	_, _ = d.device.Shell("input keyevent 4")
+	time.Sleep(500 * time.Millisecond)
+	if !d.isInputShown() {
+		return successResult("Keyboard hidden via BACK key", nil)
+	}
+	return errorResult(nil, "BACK key failed to hide keyboard")
 }
 
 func (d *Driver) inputRandom(step *flow.InputRandomStep) *core.CommandResult {

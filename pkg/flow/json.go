@@ -88,6 +88,9 @@ func unmarshalStepByType(stepType StepType, data []byte) (Step, error) {
 
 	case StepHideKeyboard:
 		var s HideKeyboardStep
+		if err := json.Unmarshal(data, &s); err != nil {
+			return nil, err
+		}
 		s.StepType = stepType
 		return &s, nil
 
@@ -257,6 +260,14 @@ func unmarshalStepByType(stepType StepType, data []byte) (Step, error) {
 
 	case StepPressKey:
 		var s PressKeyStep
+		if err := json.Unmarshal(data, &s); err != nil {
+			return nil, err
+		}
+		s.StepType = stepType
+		return &s, nil
+
+	case StepSleep:
+		var s SleepStep
 		if err := json.Unmarshal(data, &s); err != nil {
 			return nil, err
 		}

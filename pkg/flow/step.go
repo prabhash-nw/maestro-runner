@@ -1,7 +1,11 @@
 // Package flow handles parsing and representation of Maestro YAML flow files.
 package flow
 
-import "gopkg.in/yaml.v3"
+import (
+	"fmt"
+
+	"gopkg.in/yaml.v3"
+)
 
 // StepType represents the type of step.
 type StepType string
@@ -103,6 +107,7 @@ const (
 	StepAddMedia       StepType = "addMedia"
 
 	// Other
+	StepSleep                 StepType = "sleep"
 	StepPressKey              StepType = "pressKey"
 	StepWaitForAnimationToEnd StepType = "waitForAnimationToEnd"
 	StepDefineVariables       StepType = "defineVariables"
@@ -223,8 +228,10 @@ type BackStep struct {
 }
 
 // HideKeyboardStep hides the keyboard.
+// Approach can be empty (try all), "appium", "escape", or "back".
 type HideKeyboardStep struct {
 	BaseStep `yaml:",inline" json:",inline"`
+	Approach string `yaml:"approach" json:"approach,omitempty"`
 }
 
 // AcceptAlertStep accepts a system alert dialog (taps Allow/OK).
@@ -720,6 +727,17 @@ type AddMediaStep struct {
 // ============================================
 // Other Steps
 // ============================================
+
+// SleepStep pauses execution for a given duration in milliseconds.
+type SleepStep struct {
+	BaseStep   `yaml:",inline" json:",inline"`
+	DurationMs int `yaml:"durationMs" json:"durationMs,omitempty"`
+}
+
+// Describe returns a human-readable description of the sleep step.
+func (s *SleepStep) Describe() string {
+	return fmt.Sprintf("sleep: %dms", s.DurationMs)
+}
 
 // PressKeyStep presses a key.
 type PressKeyStep struct {
