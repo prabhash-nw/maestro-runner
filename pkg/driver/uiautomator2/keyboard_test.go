@@ -100,6 +100,25 @@ func TestParseKeyboardFrame(t *testing.T) {
     mHasSurface=true`,
 			want: &core.Bounds{X: 0, Y: 1428, Width: 1080, Height: 912},
 		},
+		{
+			name: "vendor keyboard — no touchable region, uses mFrame + content insets",
+			input: `  Window #1 Window{abcdef InputMethod}:
+    mFrame=[0,84][1080,2400]
+    mViewVisibility=0x0 mHaveFrame=true mObscured=false
+    mGivenContentInsets=[0,1292][0,0] mGivenVisibleInsets=[0,1292][0,0]
+    mHasSurface=true isReadyForDisplay()=true
+    isOnScreen=true`,
+			want: &core.Bounds{X: 0, Y: 1376, Width: 1080, Height: 1024},
+		},
+		{
+			name: "full-screen mFrame without insets or touchable region — rejected",
+			input: `  Window #1 Window{abcdef InputMethod}:
+    mFrame=[0,84][1080,2400]
+    mViewVisibility=0x0 mHaveFrame=true
+    mGivenContentInsets=[0,0][0,0]
+    isOnScreen=true`,
+			want: nil,
+		},
 	}
 
 	for _, tt := range tests {
