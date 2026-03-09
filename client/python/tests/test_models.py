@@ -100,6 +100,7 @@ class TestElementInfo:
 
     def test_from_dict_partial(self):
         elem = ElementInfo.from_dict({"text": "hello", "visible": True})
+        assert elem is not None
         assert elem.text == "hello"
         assert elem.visible is True
         assert elem.id == ""
