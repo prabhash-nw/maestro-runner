@@ -23,17 +23,17 @@ var (
 // Supports both Android <=12 (mFrame=) and Android 13+ (touchable region + isOnScreen) formats.
 // Returns nil if keyboard is not visible.
 func parseKeyboardFrame(dumpsysOutput string) *core.Bounds {
-	// Strategy 1: Android <=12 — look for mFrame=
+	// Strategy 1: Android 13+ — check isOnScreen + touchable region (most accurate).
+	// Must be checked first: Android 13+ output also contains mFrame= but that gives
+	// the full InputMethod window bounds, not the actual keyboard area.
+	if strings.Contains(dumpsysOutput, "isOnScreen=true") {
+		if matches := touchableRegionRegex.FindStringSubmatch(dumpsysOutput); matches != nil {
+			return boundsFromMatches(matches)
+		}
+	}
+
+	// Strategy 2: Android <=12 — look for mFrame=
 	if matches := mFrameRegex.FindStringSubmatch(dumpsysOutput); matches != nil {
-		return boundsFromMatches(matches)
-	}
-
-	// Strategy 2: Android 13+ — check isOnScreen + touchable region
-	if !strings.Contains(dumpsysOutput, "isOnScreen=true") {
-		return nil
-	}
-
-	if matches := touchableRegionRegex.FindStringSubmatch(dumpsysOutput); matches != nil {
 		return boundsFromMatches(matches)
 	}
 

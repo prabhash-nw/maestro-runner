@@ -60,6 +60,20 @@ func TestParseKeyboardFrame(t *testing.T) {
 			want: &core.Bounds{X: 0, Y: 1428, Width: 1080, Height: 912},
 		},
 		{
+			name: "Android 13+ with both mFrame and touchable region prefers touchable region",
+			input: `  Window #2 Window{abcdef InputMethod}:
+    mDisplayId=0 stackId=0 mSession=Session{...}
+    mAttrs={(0,0)(fillxfill) ty=INPUT_METHOD fmt=TRANSLUCENT}
+    mBaseLayer=131000 mSubLayer=0
+    mFrame=[0,84][1080,2400]
+    mViewVisibility=0x0 mHaveFrame=true mObscured=false
+    touchable region=SkRegion((0,1428,1080,2340))
+    mHasSurface=true isReadyForDisplay()=true
+    Frames: parent=[0,84][1080,2400] display=[0,84][1080,2400] frame=[0,84][1080,2400]
+    isOnScreen=true`,
+			want: &core.Bounds{X: 0, Y: 1428, Width: 1080, Height: 912},
+		},
+		{
 			name: "Android 13+ keyboard hidden (isOnScreen=false)",
 			input: `    mViewVisibility=0x8 mHaveFrame=true
     touchable region=SkRegion((0,1538,1080,2340))
