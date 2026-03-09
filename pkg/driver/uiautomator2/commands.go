@@ -575,6 +575,11 @@ func (d *Driver) findScrollableElement(timeoutMs int) (*core.ElementInfo, int) {
 			}
 		}
 
+		// Valid page source with elements but no scrollables — no point waiting
+		if len(elements) > 0 {
+			return nil, 0
+		}
+
 		time.Sleep(pollInterval)
 	}
 

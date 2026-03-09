@@ -1080,9 +1080,9 @@ func TestSetAirplaneModeEnabled(t *testing.T) {
 		t.Errorf("expected success, got error: %v", result.Error)
 	}
 
-	// Check first command sets airplane_mode_on to 1
-	if len(mock.commands) < 1 || mock.commands[0] != "settings put global airplane_mode_on 1" {
-		t.Errorf("expected settings command, got %v", mock.commands)
+	// New implementation tries "cmd connectivity airplane-mode" first (Android 11+)
+	if len(mock.commands) < 1 || mock.commands[0] != "cmd connectivity airplane-mode enable" {
+		t.Errorf("expected cmd connectivity command, got %v", mock.commands)
 	}
 }
 
@@ -1097,9 +1097,9 @@ func TestSetAirplaneModeDisabled(t *testing.T) {
 		t.Errorf("expected success, got error: %v", result.Error)
 	}
 
-	// Check first command sets airplane_mode_on to 0
-	if len(mock.commands) < 1 || mock.commands[0] != "settings put global airplane_mode_on 0" {
-		t.Errorf("expected settings command, got %v", mock.commands)
+	// New implementation tries "cmd connectivity airplane-mode" first (Android 11+)
+	if len(mock.commands) < 1 || mock.commands[0] != "cmd connectivity airplane-mode disable" {
+		t.Errorf("expected cmd connectivity command, got %v", mock.commands)
 	}
 }
 
@@ -1129,16 +1129,16 @@ func TestToggleAirplaneModeFromOff(t *testing.T) {
 		t.Errorf("expected success, got error: %v", result.Error)
 	}
 
-	// Should toggle from 0 to 1
+	// Should toggle from disable → enable via "cmd connectivity airplane-mode enable"
 	found := false
 	for _, cmd := range mock.commands {
-		if cmd == "settings put global airplane_mode_on 1" {
+		if cmd == "cmd connectivity airplane-mode enable" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected toggle to 1, got commands: %v", mock.commands)
+		t.Errorf("expected toggle to enable, got commands: %v", mock.commands)
 	}
 }
 
@@ -1153,16 +1153,16 @@ func TestToggleAirplaneModeFromOn(t *testing.T) {
 		t.Errorf("expected success, got error: %v", result.Error)
 	}
 
-	// Should toggle from 1 to 0
+	// Should toggle from enable → disable via "cmd connectivity airplane-mode disable"
 	found := false
 	for _, cmd := range mock.commands {
-		if cmd == "settings put global airplane_mode_on 0" {
+		if cmd == "cmd connectivity airplane-mode disable" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected toggle to 0, got commands: %v", mock.commands)
+		t.Errorf("expected toggle to disable, got commands: %v", mock.commands)
 	}
 }
 
@@ -2483,7 +2483,9 @@ func TestSwipeWithAbsoluteCoords(t *testing.T) {
 
 func TestSwipeEmptyDirectionDefaultsToUp(t *testing.T) {
 	shell := &MockShellExecutor{}
-	client := &MockUIA2Client{}
+	client := &MockUIA2Client{
+		sourceData: `<hierarchy rotation="0"><node class="android.widget.FrameLayout" bounds="[0,0][1080,1920]" text="" resource-id="" content-desc="" enabled="true" displayed="true"/></hierarchy>`,
+	}
 	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
 	step := &flow.SwipeStep{Direction: ""}
@@ -3238,6 +3240,7 @@ func TestSetWaitForIdleTimeoutServerError(t *testing.T) {
 // ============================================================================
 
 func TestTravelSuccess(t *testing.T) {
+	t.Parallel()
 	shell := &MockShellExecutor{}
 	driver := &Driver{device: shell}
 
@@ -4065,6 +4068,7 @@ func TestLaunchAppViaShellAmStartErrorWithArgs(t *testing.T) {
 // ============================================================================
 
 func TestScrollUntilVisibleRespectsMaxScrolls(t *testing.T) {
+	t.Parallel()
 	scrollCount := 0
 	client := &MockUIA2Client{
 		sourceFunc: func() (string, error) {
@@ -4103,6 +4107,7 @@ func TestScrollUntilVisibleRespectsMaxScrolls(t *testing.T) {
 }
 
 func TestScrollUntilVisibleRespectsTimeout(t *testing.T) {
+	t.Parallel()
 	client := &MockUIA2Client{
 		sourceFunc: func() (string, error) {
 			// Element never found
@@ -4137,6 +4142,7 @@ func TestScrollUntilVisibleRespectsTimeout(t *testing.T) {
 }
 
 func TestScrollUntilVisibleDefaultMaxScrolls(t *testing.T) {
+	t.Parallel()
 	client := &MockUIA2Client{
 		sourceFunc: func() (string, error) {
 			return `<?xml version="1.0" encoding="UTF-8"?>

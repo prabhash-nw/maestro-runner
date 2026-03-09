@@ -710,7 +710,9 @@ func TestExecuteScrollDefaultDirection(t *testing.T) {
 }
 
 func TestExecuteSwipe(t *testing.T) {
-	client := &MockUIA2Client{}
+	client := &MockUIA2Client{
+		sourceData: `<hierarchy rotation="0"><node class="android.widget.FrameLayout" bounds="[0,0][1080,1920]" text="" resource-id="" content-desc="" enabled="true" displayed="true"/></hierarchy>`,
+	}
 	shell := &MockShellExecutor{}
 	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
@@ -740,7 +742,9 @@ func TestExecuteSwipeError(t *testing.T) {
 }
 
 func TestExecuteSwipeDefaultDirection(t *testing.T) {
-	client := &MockUIA2Client{}
+	client := &MockUIA2Client{
+		sourceData: `<hierarchy rotation="0"><node class="android.widget.FrameLayout" bounds="[0,0][1080,1920]" text="" resource-id="" content-desc="" enabled="true" displayed="true"/></hierarchy>`,
+	}
 	shell := &MockShellExecutor{}
 	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 
@@ -938,9 +942,12 @@ func TestInputRandomNoActiveElement(t *testing.T) {
 // ============================================================================
 
 func TestExecuteAllStepTypes(t *testing.T) {
+	t.Parallel()
 	// This test covers the Execute switch statement for all step types
 	// Most will fail because they need findElement, but this covers the switch paths
-	client := &MockUIA2Client{}
+	client := &MockUIA2Client{
+		sourceData: `<hierarchy rotation="0"><node class="android.widget.FrameLayout" bounds="[0,0][1080,1920]" text="" resource-id="" content-desc="" enabled="true" displayed="true"/></hierarchy>`,
+	}
 	shell := &MockShellExecutor{}
 	driver := New(client, &core.PlatformInfo{ScreenWidth: 1080, ScreenHeight: 1920}, shell)
 	driver.SetFindTimeout(100)        // 100ms for fast test failure
@@ -1433,6 +1440,7 @@ func TestAssertVisibleElementFoundIsVisible(t *testing.T) {
 }
 
 func TestAssertNotVisibleElementFound(t *testing.T) {
+	t.Parallel()
 	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
 		"POST /element": func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]interface{}{
@@ -2729,6 +2737,7 @@ func TestRelativeSelectorWithNegativeIndex(t *testing.T) {
 }
 
 func TestRelativeSelectorNoMatch(t *testing.T) {
+	t.Parallel()
 	pageSource := `<?xml version="1.0" encoding="UTF-8"?>
 <hierarchy>
     <node text="Header" bounds="[0,0][1080,100]" class="android.widget.TextView" />
@@ -2762,6 +2771,7 @@ func TestRelativeSelectorNoMatch(t *testing.T) {
 
 	client := newMockHTTPClient(server.URL)
 	driver := New(client.Client, nil, nil)
+	driver.SetFindTimeout(100)
 
 	// No element with text "Button" below Header
 	step := &flow.TapOnStep{
@@ -2778,6 +2788,7 @@ func TestRelativeSelectorNoMatch(t *testing.T) {
 }
 
 func TestRelativeSelectorPageSourceError(t *testing.T) {
+	t.Parallel()
 	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
 		"POST /element": func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]interface{}{
@@ -2807,6 +2818,7 @@ func TestRelativeSelectorPageSourceError(t *testing.T) {
 
 	client := newMockHTTPClient(server.URL)
 	driver := New(client.Client, nil, nil)
+	driver.SetFindTimeout(100)
 
 	step := &flow.TapOnStep{
 		Selector: flow.Selector{
@@ -2822,6 +2834,7 @@ func TestRelativeSelectorPageSourceError(t *testing.T) {
 }
 
 func TestRelativeSelectorParseError(t *testing.T) {
+	t.Parallel()
 	server := setupMockServer(t, map[string]func(w http.ResponseWriter, r *http.Request){
 		"POST /element": func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]interface{}{
@@ -2850,6 +2863,7 @@ func TestRelativeSelectorParseError(t *testing.T) {
 
 	client := newMockHTTPClient(server.URL)
 	driver := New(client.Client, nil, nil)
+	driver.SetFindTimeout(100)
 
 	step := &flow.TapOnStep{
 		Selector: flow.Selector{

@@ -64,6 +64,7 @@ func (m *mockDeviceLabClient) SetAppiumSettings(map[string]interface{}) error { 
 var _ DeviceLabClient = (*mockDeviceLabClient)(nil)
 
 func TestScrollUntilVisibleRespectsMaxScrolls(t *testing.T) {
+	t.Parallel()
 	client := &mockDeviceLabClient{
 		sourceFunc: func() (string, error) {
 			return `<?xml version="1.0" encoding="UTF-8"?>
@@ -95,6 +96,7 @@ func TestScrollUntilVisibleRespectsMaxScrolls(t *testing.T) {
 }
 
 func TestScrollUntilVisibleRespectsTimeout(t *testing.T) {
+	t.Parallel()
 	client := &mockDeviceLabClient{
 		sourceFunc: func() (string, error) {
 			return `<?xml version="1.0" encoding="UTF-8"?>
@@ -126,6 +128,7 @@ func TestScrollUntilVisibleRespectsTimeout(t *testing.T) {
 }
 
 func TestScrollUntilVisibleDefaultMaxScrolls(t *testing.T) {
+	t.Parallel()
 	client := &mockDeviceLabClient{
 		sourceFunc: func() (string, error) {
 			return `<?xml version="1.0" encoding="UTF-8"?>

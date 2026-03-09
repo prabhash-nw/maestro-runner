@@ -1140,6 +1140,7 @@ func TestAppiumFindElementRelativeLeftOf(t *testing.T) {
 
 // TestFindElementRelativeAnchorNotFound tests when anchor element not found
 func TestAppiumFindElementRelativeAnchorNotFound(t *testing.T) {
+	t.Parallel()
 	server := mockAppiumServerForRelativeElements()
 	defer server.Close()
 	driver := createTestAppiumDriver(server)
@@ -1157,6 +1158,7 @@ func TestAppiumFindElementRelativeAnchorNotFound(t *testing.T) {
 
 // TestFindElementRelativeNoMatch tests when no element matches
 func TestAppiumFindElementRelativeNoMatch(t *testing.T) {
+	t.Parallel()
 	server := mockAppiumServerForRelativeElements()
 	defer server.Close()
 	driver := createTestAppiumDriver(server)
@@ -1562,6 +1564,7 @@ func TestAppiumScrollUntilVisibleSuccess(t *testing.T) {
 
 // TestScrollUntilVisibleNotFound tests scrollUntilVisible when element not found
 func TestAppiumScrollUntilVisibleNotFound(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		path := r.URL.Path
@@ -1970,6 +1973,7 @@ func TestPasteTextError(t *testing.T) {
 
 // TestCopyTextFromError tests copyTextFrom when element not found
 func TestCopyTextFromError(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/source") {
@@ -2436,6 +2440,7 @@ func TestInputTextError(t *testing.T) {
 
 // TestInputTextIOSUsesMobileKeys verifies iOS uses "mobile: keys" instead of W3C key actions
 func TestInputTextIOSUsesMobileKeys(t *testing.T) {
+	t.Parallel()
 	var lastPath string
 	var lastBody map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2495,6 +2500,7 @@ func TestInputTextAndroidStillUsesActions(t *testing.T) {
 // =============================================================================
 
 func TestAppiumScrollUntilVisibleRespectsMaxScrolls(t *testing.T) {
+	t.Parallel()
 	scrollCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
