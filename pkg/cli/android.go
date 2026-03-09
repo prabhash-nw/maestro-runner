@@ -455,7 +455,11 @@ func createDeviceLabDriver(cfg *RunConfig, dev *device.AndroidDevice, info devic
 		}
 	})
 
+	// Wire WebView CDP support (Rod/CDP for element finding in WebViews)
+	driver.SetWebViewForwarder(dev)
+
 	cleanup := func() {
+		driver.Close()
 		if err := adapter.DeleteSession(); err != nil {
 			logger.Debug("failed to delete session during cleanup: %v", err)
 		}
