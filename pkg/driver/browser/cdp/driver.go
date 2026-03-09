@@ -140,7 +140,7 @@ func New(cfg Config) (*Driver, error) {
 	}
 
 	// Inject JS helper (persists across navigations)
-	_, err = page.EvalOnNewDocument(jsHelperCode)
+	_, err = page.EvalOnNewDocument(JSHelperCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inject JS helper: %w", err)
 	}
