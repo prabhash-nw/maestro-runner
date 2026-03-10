@@ -69,7 +69,7 @@ func CreateIOSDriver(cfg *RunConfig) (core.Driver, func(), error) {
 	}
 
 	// 1. Install app if specified
-	if cfg.AppFile != "" {
+	if cfg.AppFile != "" && !cfg.NoAppInstall {
 		printSetupStep(fmt.Sprintf("Installing app: %s", cfg.AppFile))
 		logger.Info("Installing iOS app: %s to device %s (simulator=%v)", cfg.AppFile, udid, isSimulator)
 		if err := installIOSApp(udid, cfg.AppFile, isSimulator); err != nil {
@@ -81,15 +81,17 @@ func CreateIOSDriver(cfg *RunConfig) (core.Driver, func(), error) {
 	}
 
 	// 2. Check if WDA is installed
-	printSetupStep("Checking WDA installation...")
-	if !wdadriver.IsWDAInstalled() {
-		printSetupStep("Downloading WDA...")
-		if _, err := wdadriver.Setup(); err != nil {
-			return nil, nil, fmt.Errorf("WDA setup failed: %w", err)
+	if !cfg.NoDriverInstall {
+		printSetupStep("Checking WDA installation...")
+		if !wdadriver.IsWDAInstalled() {
+			printSetupStep("Downloading WDA...")
+			if _, err := wdadriver.Setup(); err != nil {
+				return nil, nil, fmt.Errorf("WDA setup failed: %w", err)
+			}
+			printSetupSuccess("WDA installed")
+		} else {
+			printSetupSuccess("WDA already installed")
 		}
-		printSetupSuccess("WDA installed")
-	} else {
-		printSetupSuccess("WDA already installed")
 	}
 
 	// 3. Create WDA runner

@@ -81,7 +81,7 @@ func CreateAndroidDriver(cfg *RunConfig) (core.Driver, func(), error) {
 	}
 
 	// 3. Install app if specified
-	if cfg.AppFile != "" {
+	if cfg.AppFile != "" && !cfg.NoAppInstall {
 		printSetupStep(fmt.Sprintf("Installing app: %s", cfg.AppFile))
 		logger.Info("Installing app: %s", cfg.AppFile)
 		if err := dev.Install(cfg.AppFile); err != nil {
@@ -130,7 +130,7 @@ func CreateAndroidDriver(cfg *RunConfig) (core.Driver, func(), error) {
 // createUIAutomator2Driver creates a direct UIAutomator2 driver (no Appium server needed).
 func createUIAutomator2Driver(cfg *RunConfig, dev *device.AndroidDevice, info device.DeviceInfo) (core.Driver, func(), error) {
 	// 1. Check/install UIAutomator2 APKs
-	if !dev.IsInstalled(device.UIAutomator2Server) {
+	if !cfg.NoDriverInstall && !dev.IsInstalled(device.UIAutomator2Server) {
 		printSetupStep("Installing UIAutomator2 APKs...")
 		apksDir, err := getDriversDir("android")
 		if err != nil {
@@ -317,12 +317,14 @@ func autoDetectAndroidDevices(count int) ([]string, error) {
 // Uses the same uiautomator2.Driver but with a WebSocket transport instead of HTTP.
 func createDeviceLabDriver(cfg *RunConfig, dev *device.AndroidDevice, info device.DeviceInfo) (core.Driver, func(), error) {
 	// 1. Check/install DeviceLab driver APKs (always check for updates)
-	apksDir, err := getDriversDir("android")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to locate drivers directory: %w", err)
-	}
-	if err := dev.InstallDeviceLabDriver(apksDir); err != nil {
-		return nil, nil, fmt.Errorf("install DeviceLab driver: %w", err)
+	if !cfg.NoDriverInstall {
+		apksDir, err := getDriversDir("android")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to locate drivers directory: %w", err)
+		}
+		if err := dev.InstallDeviceLabDriver(apksDir); err != nil {
+			return nil, nil, fmt.Errorf("install DeviceLab driver: %w", err)
+		}
 	}
 
 	// 2. Start DeviceLab Android Driver

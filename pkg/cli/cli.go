@@ -62,6 +62,16 @@ var GlobalFlags = []cli.Flag{
 		Name:  "no-ansi",
 		Usage: "Disable ANSI colors",
 	},
+	&cli.BoolFlag{
+		Name:    "no-app-install",
+		Usage:   "Skip app installation even if --app-file is provided",
+		EnvVars: []string{"MAESTRO_NO_APP_INSTALL"},
+	},
+	&cli.BoolFlag{
+		Name:    "no-driver-install",
+		Usage:   "Skip driver installation (UIAutomator2, WDA, DeviceLab)",
+		EnvVars: []string{"MAESTRO_NO_DRIVER_INSTALL"},
+	},
 	&cli.StringFlag{
 		Name:    "team-id",
 		Usage:   "Apple Development Team ID for WDA code signing (iOS)",

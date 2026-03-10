@@ -466,6 +466,10 @@ type RunConfig struct {
 	ShutdownAfter     bool   // Shutdown emulators/simulators started by maestro-runner after tests
 	BootTimeout       int    // Device boot timeout in seconds
 
+	// Install control
+	NoAppInstall    bool // Skip app installation
+	NoDriverInstall bool // Skip driver installation
+
 	// Flutter
 	NoFlutterFallback bool // Disable automatic Flutter VM Service fallback
 }
@@ -636,6 +640,8 @@ func runTest(c *cli.Context) error {
 		AutoStartEmulator:  getBool("auto-start-emulator"),
 		ShutdownAfter:      getBool("shutdown-after"),
 		BootTimeout:        getInt("boot-timeout"),
+		NoAppInstall:       getBool("no-app-install"),
+		NoDriverInstall:    getBool("no-driver-install"),
 		NoFlutterFallback:  getBool("no-flutter-fallback"),
 	}
 
