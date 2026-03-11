@@ -31,11 +31,17 @@ Runs tests, lint, and type checks for the Python client at `client/python/`.
 
 - Python venv at `client/python/.venv/` — activate it before every command or
   pytest will use the system Python and not find the project's dependencies
+- Prefer the project-local venv (`client/python/.venv`) over repo-root venvs.
+  If `python -m pytest` says `No module named pytest`, you're likely using the
+  wrong interpreter.
 - For e2e/Android tests: Android emulator running + `maestro-runner` binary built
 
 ```sh
 # Activate the venv first — all commands below assume it is active
 cd client/python && source .venv/bin/activate
+
+# Or run directly without activating
+cd client/python && ./.venv/bin/python -m pytest -v
 ```
 
 ## Step 1: Unit Tests (no device needed)
@@ -70,6 +76,9 @@ adb devices
 
 # Verify it's up
 curl -s http://localhost:9999/status
+
+# Optional: ensure no stale server process is holding the device
+pgrep -af "maestro-runner.*server" || true
 ```
 
 ### 3. Run the tests
@@ -110,6 +119,23 @@ make lint-py-fix
 cd client/python && source .venv/bin/activate && python -m pytest tests/test_client.py tests/test_models.py -v
 ```
 
+## Reliable Full-Client Run Order
+
+When both unit and Android e2e tests are needed, run in this order to reduce
+device-lock flakes:
+
+```sh
+# 1) Unit/model/integration tests (no device lock risk)
+cd client/python && ./.venv/bin/python -m pytest tests/test_client.py tests/test_models.py -v
+
+# 2) Start server and confirm status
+cd /path/to/repo && ./maestro-runner --platform android server --port 9999 &>/tmp/maestro-server.log &
+curl -s http://localhost:9999/status
+
+# 3) E2E tests separately
+cd client/python && ./.venv/bin/python -m pytest tests/test_e2e_android.py -v
+```
+
 ## Reports
 
 HTML and JUnit XML reports are written to `client/python/reports/` after every pytest run:
@@ -121,6 +147,7 @@ HTML and JUnit XML reports are written to `client/python/reports/` after every p
 | Problem | Fix |
 |---------|-----|
 | `Connection refused` on e2e tests | Server not running — start it with step 2 above |
-| `ModuleNotFoundError` | venv not activated or deps not installed: `pip install -e ".[dev]"` |
+| `No module named pytest` | You're using the wrong Python interpreter. Use `client/python/.venv/bin/python` |
+| `device ... is already in use` | Another server/session is holding the emulator. Stop stale server process and rerun e2e tests separately |
 | `adb: command not found` | Android SDK not on PATH; set `ANDROID_HOME` |
 | Lint `E501` line-too-long | Line length limit is 100; wrap long lines |

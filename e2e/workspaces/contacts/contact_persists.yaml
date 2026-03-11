@@ -1,0 +1,16 @@
+appId: com.google.android.contacts
+name: Contact persists after relaunch
+tags:
+  - android
+  - contacts
+---
+# First create the contact (reuses the add_contact flow as setup)
+- runFlow: add_contact.yaml
+
+# Cold-relaunch the app
+- stopApp
+- launchApp
+- waitForAnimationToEnd
+
+# The contact must still be visible
+- assertVisible: "Alice Tester"

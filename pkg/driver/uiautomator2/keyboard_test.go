@@ -173,7 +173,8 @@ func TestGetKeyboardBounds(t *testing.T) {
 	t.Run("keyboard visible with mFrame", func(t *testing.T) {
 		mock := &MockUIA2Client{}
 		shell := &MockShellExecutor{
-			response: `mFrame=[0,1584][1080,2400]`,
+			response: `mInputShown=true
+mFrame=[0,1584][1080,2400]`,
 		}
 		d := New(mock, nil, shell)
 		bounds := d.getKeyboardBounds()
@@ -188,7 +189,8 @@ func TestGetKeyboardBounds(t *testing.T) {
 	t.Run("keyboard visible Android 13+", func(t *testing.T) {
 		mock := &MockUIA2Client{}
 		shell := &MockShellExecutor{
-			response: `    touchable region=SkRegion((0,1428,1080,2340))
+			response: `mInputShown=true
+    touchable region=SkRegion((0,1428,1080,2340))
     isOnScreen=true`,
 		}
 		d := New(mock, nil, shell)
@@ -209,7 +211,8 @@ func TestIsKeyboardVisible(t *testing.T) {
 		t.Error("expected false when device is nil")
 	}
 
-	shell := &MockShellExecutor{response: `mFrame=[0,1584][1080,2400]`}
+	shell := &MockShellExecutor{response: `mInputShown=true
+mFrame=[0,1584][1080,2400]`}
 	d2 := New(mock, nil, shell)
 	if !d2.isKeyboardVisible() {
 		t.Error("expected true when keyboard frame is present")
@@ -392,7 +395,8 @@ func TestTapOnKeyboardHintMessage(t *testing.T) {
 		defer server.Close()
 
 		shell := &MockShellExecutor{
-			response: `    touchable region=SkRegion((0,1428,1080,2340))
+			response: `mInputShown=true
+    touchable region=SkRegion((0,1428,1080,2340))
     isOnScreen=true`,
 		}
 		client := newMockHTTPClient(server.URL)
@@ -420,7 +424,8 @@ func TestTapOnKeyboardHintMessage(t *testing.T) {
 		defer server.Close()
 
 		shell := &MockShellExecutor{
-			response: `    touchable region=SkRegion((0,1428,1080,2340))
+			response: `mInputShown=true
+    touchable region=SkRegion((0,1428,1080,2340))
     isOnScreen=true`,
 		}
 		client := newMockHTTPClient(server.URL)
@@ -458,7 +463,8 @@ func TestTapOnKeyboardHintMessage(t *testing.T) {
 		defer server.Close()
 
 		shell := &MockShellExecutor{
-			response: `    touchable region=SkRegion((0,1428,1080,2340))
+			response: `mInputShown=true
+    touchable region=SkRegion((0,1428,1080,2340))
     isOnScreen=true`,
 		}
 		client := newMockHTTPClient(server.URL)
@@ -481,7 +487,8 @@ func TestAssertVisibleKeyboardBlocking(t *testing.T) {
 		defer server.Close()
 
 		shell := &MockShellExecutor{
-			response: `    touchable region=SkRegion((0,1428,1080,2340))
+			response: `mInputShown=true
+    touchable region=SkRegion((0,1428,1080,2340))
     isOnScreen=true`,
 		}
 		client := newMockHTTPClient(server.URL)

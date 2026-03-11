@@ -1398,6 +1398,12 @@ func TestDetermineExecutionMode_ParallelWithoutAutoStart(t *testing.T) {
 	os.Stdout, _ = os.Open(os.DevNull)
 	defer func() { os.Stdout = oldStdout }()
 
+	oldDetect := autoDetectDevicesFn
+	autoDetectDevicesFn = func(platform string, count int) ([]string, error) {
+		return nil, fmt.Errorf("no available devices found")
+	}
+	t.Cleanup(func() { autoDetectDevicesFn = oldDetect })
+
 	cfg := &RunConfig{
 		Parallel:          2,
 		Devices:           nil,

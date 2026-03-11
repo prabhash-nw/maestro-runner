@@ -167,7 +167,7 @@ func TestLaunchAppShellResolveActivity(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "com.example.app/.MainActivity",
+			"resolve-activity":             "com.example.app/.MainActivity",
 		},
 		fallback: "Success",
 	}
@@ -220,7 +220,7 @@ func TestLaunchAppShellAmStartForOlderAPI(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "25",
-			"resolve-activity":            "com.example.app/.MainActivity",
+			"resolve-activity":             "com.example.app/.MainActivity",
 		},
 		fallback: "Success",
 	}
@@ -284,7 +284,7 @@ func TestLaunchAppMonkeyFallbackResolveFailed(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "No activity found",
+			"resolve-activity":             "No activity found",
 		},
 		errors: map[string]error{
 			"dumpsys package": fmt.Errorf("dumpsys failed"),
@@ -316,7 +316,7 @@ func TestLaunchAppMonkeyAborted(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "No activity found",
+			"resolve-activity":             "No activity found",
 			"monkey":                       "monkey aborted",
 		},
 		errors: map[string]error{
@@ -389,7 +389,7 @@ func TestLaunchAppDumpsysFallbackWithArgs(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "No activity found",
+			"resolve-activity":             "No activity found",
 			"dumpsys package": "com.example.app/.MainActivity filter abc123\n" +
 				"  Action: \"android.intent.action.MAIN\"\n" +
 				"  Category: \"android.intent.category.LAUNCHER\"\n",
@@ -425,7 +425,7 @@ func TestLaunchAppDotPrefixRetry(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "com.example.app/MainActivity",
+			"resolve-activity":             "com.example.app/MainActivity",
 		},
 		fallback: "Success",
 	}
@@ -2137,7 +2137,8 @@ func TestStartRecordingError(t *testing.T) {
 
 func TestHideKeyboardSuccess(t *testing.T) {
 	client := &MockUIA2Client{}
-	driver := New(client, nil, nil)
+	shell := &MockShellExecutor{responses: []string{"mInputShown=true", "mInputShown=false"}}
+	driver := New(client, nil, shell)
 
 	step := &flow.HideKeyboardStep{}
 	result := driver.hideKeyboard(step)
@@ -3918,11 +3919,11 @@ func TestResolveLauncherActivity(t *testing.T) {
 
 func TestLaunchWithMonkey(t *testing.T) {
 	tests := []struct {
-		name    string
-		appID   string
-		output  string
-		err     error
-		wantOK  bool
+		name   string
+		appID  string
+		output string
+		err    error
+		wantOK bool
 	}{
 		{
 			name:   "successful launch",
@@ -3977,7 +3978,7 @@ func TestLaunchAppViaShellWithArgTypes(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "com.example.app/.MainActivity",
+			"resolve-activity":             "com.example.app/.MainActivity",
 		},
 		fallback: "Success",
 	}
@@ -3986,7 +3987,7 @@ func TestLaunchAppViaShellWithArgTypes(t *testing.T) {
 	// Test with multiple argument types
 	args := map[string]interface{}{
 		"stringKey": "stringValue",
-		"intKey":    float64(42),    // JSON unmarshals numbers as float64
+		"intKey":    float64(42), // JSON unmarshals numbers as float64
 		"floatKey":  float64(3.14),
 		"boolKey":   true,
 	}
@@ -4029,8 +4030,8 @@ func TestLaunchAppViaShellAmStartError(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "com.example.app/.MainActivity",
-			"am start-activity":           "Error: Activity not started",
+			"resolve-activity":             "com.example.app/.MainActivity",
+			"am start-activity":            "Error: Activity not started",
 			"monkey":                       "Events injected: 1",
 		},
 		fallback: "",
@@ -4049,8 +4050,8 @@ func TestLaunchAppViaShellAmStartErrorWithArgs(t *testing.T) {
 	shell := &shellMock{
 		responses: map[string]string{
 			"getprop ro.build.version.sdk": "30",
-			"resolve-activity":            "com.example.app/.MainActivity",
-			"am start-activity":           "Error: Activity not started",
+			"resolve-activity":             "com.example.app/.MainActivity",
+			"am start-activity":            "Error: Activity not started",
 		},
 		fallback: "",
 	}

@@ -443,8 +443,8 @@ type RunConfig struct {
 
 	// Execution
 	Continuous bool
-	Headed  bool   // Show browser window (web only, default is headless)
-	Browser string // chrome, chromium, or path to binary (web only)
+	Headed     bool   // Show browser window (web only, default is headless)
+	Browser    string // chrome, chromium, or path to binary (web only)
 
 	// Device
 	Platform string
@@ -1015,7 +1015,7 @@ func determineExecutionMode(cfg *RunConfig, emulatorMgr *emulator.Manager, simul
 			deviceIDs = cfg.Devices
 		} else if cfg.Parallel > 0 {
 			// Try to auto-detect existing available devices (not in use)
-			existingDevices, detectErr := autoDetectDevices(cfg.Platform, cfg.Parallel)
+			existingDevices, detectErr := autoDetectDevicesFn(cfg.Platform, cfg.Parallel)
 			if detectErr != nil && !cfg.AutoStartEmulator {
 				// No devices and auto-start disabled - show helpful error
 				return false, nil, buildParallelDeviceError(cfg, 0)
@@ -1911,6 +1911,9 @@ func isSocketInUse(socketPath string) bool {
 	// Check if the owning process is still alive via PID file
 	return device.IsOwnerAlive(socketPath)
 }
+
+// autoDetectDevicesFn can be overridden in tests to avoid host-dependent device state.
+var autoDetectDevicesFn = autoDetectDevices
 
 // autoDetectDevices finds N available devices for the specified platform.
 // Returns device IDs that can be used for parallel execution.

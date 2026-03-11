@@ -189,13 +189,19 @@ func (m *MockUIA2Client) SetAppiumSettings(settings map[string]interface{}) erro
 // ============================================================================
 
 type MockShellExecutor struct {
-	commands []string
-	response string
-	err      error
+	commands  []string
+	responses []string
+	response  string
+	err       error
 }
 
 func (m *MockShellExecutor) Shell(cmd string) (string, error) {
 	m.commands = append(m.commands, cmd)
+	if len(m.responses) > 0 {
+		resp := m.responses[0]
+		m.responses = m.responses[1:]
+		return resp, m.err
+	}
 	return m.response, m.err
 }
 
@@ -758,7 +764,8 @@ func TestExecuteSwipeDefaultDirection(t *testing.T) {
 
 func TestExecuteHideKeyboard(t *testing.T) {
 	client := &MockUIA2Client{}
-	driver := New(client, nil, nil)
+	shell := &MockShellExecutor{responses: []string{"mInputShown=true", "mInputShown=false"}}
+	driver := New(client, nil, shell)
 
 	step := &flow.HideKeyboardStep{}
 	result := driver.Execute(step)
