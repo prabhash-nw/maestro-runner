@@ -4,8 +4,8 @@ tags:
   - android
   - contacts
 ---
-# First create the contact (reuses the add_contact flow as setup)
-- runFlow: add_contact.yaml
+# First create the contact (reuses the add_contact_android flow as setup)
+- runFlow: add_contact_android.yaml
 
 # Cold-relaunch the app
 - stopApp

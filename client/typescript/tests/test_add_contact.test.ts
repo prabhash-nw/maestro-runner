@@ -2,7 +2,7 @@
  * POM-based test — Add a new contact.
  *
  * Equivalent of: client/python/tests/test_add_contact.py
- * Also equivalent of: e2e/workspaces/contacts/add_contact.yaml
+ * Also equivalent of: e2e/workspaces/contacts/add_contact_android.yaml
  *
  * Prerequisites:
  *   1. Android emulator running (adb devices shows device)
@@ -29,7 +29,7 @@ afterAll(async () => {
 });
 
 describe("AddContact", () => {
-  /** Mirrors add_contact.yaml: launch → create → fill → save → verify. */
+  /** Mirrors add_contact_android.yaml: launch → create → fill → save → verify. */
   it("should add and verify a contact", async () => {
     const client = await getClient();
     const contactList = new ContactListPage(client);

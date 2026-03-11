@@ -1,6 +1,6 @@
 """POM-based test — Add a new contact.
 
-Equivalent of: e2e/workspaces/contacts/add_contact.yaml
+Equivalent of: e2e/workspaces/contacts/add_contact_android.yaml
 
 Prerequisites:
   1. Android emulator running (adb devices shows device)
@@ -34,7 +34,7 @@ def contact_list(client: MaestroClient) -> ContactListPage:
 
 
 class TestAddContact:
-    """Mirrors add_contact.yaml: launch → create → fill → save → verify."""
+    """Mirrors add_contact_android.yaml: launch → create → fill → save → verify."""
 
     def test_add_and_verify_contact(self, contact_list: ContactListPage):
         # Launch with a clean slate
