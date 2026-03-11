@@ -11,7 +11,7 @@ import (
 
 // Build info — set at build time via -ldflags.
 var (
-	Version   = "1.0.1"
+	Version   = "1.0.9"
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )
@@ -61,6 +61,16 @@ var GlobalFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:  "no-ansi",
 		Usage: "Disable ANSI colors",
+	},
+	&cli.BoolFlag{
+		Name:    "no-app-install",
+		Usage:   "Skip app installation even if --app-file is provided",
+		EnvVars: []string{"MAESTRO_NO_APP_INSTALL"},
+	},
+	&cli.BoolFlag{
+		Name:    "no-driver-install",
+		Usage:   "Skip driver installation (UIAutomator2, WDA, DeviceLab)",
+		EnvVars: []string{"MAESTRO_NO_DRIVER_INSTALL"},
 	},
 	&cli.StringFlag{
 		Name:    "team-id",

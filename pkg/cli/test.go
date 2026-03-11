@@ -471,46 +471,37 @@ type RunConfig struct {
 	ShutdownAfter     bool   // Shutdown emulators/simulators started by maestro-runner after tests
 	BootTimeout       int    // Device boot timeout in seconds
 
+	// Install control
+	NoAppInstall    bool // Skip app installation
+	NoDriverInstall bool // Skip driver installation
+
 	// Flutter
 	NoFlutterFallback bool // Disable automatic Flutter VM Service fallback
 }
 
+func hyperlink(url, text string) string {
+	if colorsEnabled {
+		return "\x1b]8;;" + url + "\x07" + text + "\x1b]8;;\x07"
+	}
+	return text
+}
+
 func printBanner() {
-	// Make DeviceLab.dev clickable and colored (cyan)
-	// OSC 8 hyperlink format: ESC]8;;URL BEL TEXT ESC]8;; BEL
-	deviceLabLink := "\x1b]8;;https://devicelab.dev\x07" + color(colorCyan) + "DeviceLab.dev" + color(colorReset) + "\x1b]8;;\x07"
-
-	// Make GitHub link clickable
-	githubLink := "\x1b]8;;https://github.com/devicelab-dev/maestro-runner\x07Star us on GitHub\x1b]8;;\x07"
-
-	// Box width is 64 characters (between the ║ symbols)
-	// Calculate padding for version line
-	// Visible text: "  maestro-runner " + Version + " - by DeviceLab.dev"
-	versionLineVisible := 16 + len(Version) + 20 // "  maestro-runner " + version + " - by DeviceLab.dev"
-	versionPadding := strings.Repeat(" ", 64-versionLineVisible)
-
-	// Calculate padding for GitHub line
-	// Visible text: "  ⭐ Star us on GitHub"
-	githubLineVisible := 21 // "  ⭐ " + "Star us on GitHub" (⭐ is 3 bytes but 1 visual char)
-	githubPadding := strings.Repeat(" ", 64-githubLineVisible)
+	deviceLabLink := hyperlink("https://devicelab.dev", color(colorCyan)+"DeviceLab.dev"+color(colorReset))
+	githubLink := hyperlink("https://github.com/devicelab-dev/maestro-runner", "Star us on GitHub")
 
 	fmt.Println()
-	fmt.Println("╔═══════════════════════════════════════════════════════════════════╗")
-	fmt.Printf("║  maestro-runner %s - by %s%s   ║\n", Version, deviceLabLink, versionPadding)
-	fmt.Println("║  Fast, lightweight Maestro test runner                            ║")
-	fmt.Printf("║  ⭐ %s%s  ║\n", githubLink, githubPadding)
-	fmt.Println("╚═══════════════════════════════════════════════════════════════════╝")
+	fmt.Printf("  maestro-runner %s - by %s\n", Version, deviceLabLink)
+	fmt.Println("  Fast, lightweight Maestro test runner")
+	fmt.Printf("  %s\n", githubLink)
 	fmt.Println()
 }
 
 func printFooter() {
-	// Make DeviceLab.dev clickable and colored (cyan)
-	deviceLabLink := "\x1b]8;;https://devicelab.dev\x07" + color(colorCyan) + "DeviceLab.dev" + color(colorReset) + "\x1b]8;;\x07"
+	deviceLabLink := hyperlink("https://devicelab.dev", color(colorCyan)+"DeviceLab.dev"+color(colorReset))
 
 	fmt.Println()
-	fmt.Println("╔══════════════════════════════════════════════════════════════════════════╗")
-	fmt.Printf("║ Built by %s - Turn Your Devices Into a Distributed Device Lab ║\n", deviceLabLink)
-	fmt.Println("╚══════════════════════════════════════════════════════════════════════════╝")
+	fmt.Printf("  Built by %s - Turn Your Devices Into a Distributed Device Lab\n", deviceLabLink)
 	fmt.Println()
 }
 
@@ -641,6 +632,8 @@ func runTest(c *cli.Context) error {
 		AutoStartEmulator:  getBool("auto-start-emulator"),
 		ShutdownAfter:      getBool("shutdown-after"),
 		BootTimeout:        getInt("boot-timeout"),
+		NoAppInstall:       getBool("no-app-install"),
+		NoDriverInstall:    getBool("no-driver-install"),
 		NoFlutterFallback:  getBool("no-flutter-fallback"),
 	}
 
@@ -768,9 +761,13 @@ func executeTest(cfg *RunConfig) error {
 	// Pre-checks for iOS with direct WDA driver (not Appium).
 	// Appium handles everything via capabilities — no --app-file or --team-id needed.
 	if strings.EqualFold(cfg.Platform, "ios") && cfg.Driver != "appium" {
-		if cfg.TeamID == "" {
-			return fmt.Errorf("iOS with WDA driver requires --team-id for code signing\n" +
-				"Usage: maestro-runner --platform ios --team-id <APPLE_TEAM_ID> test <flow-files>")
+		// team-id is only required for real devices, not simulators.
+		isSimTarget := cfg.StartSimulator != "" ||
+			(len(cfg.Devices) > 0 && isIOSSimulator(cfg.Devices[0]))
+		if cfg.TeamID == "" && !isSimTarget {
+			return fmt.Errorf("iOS with WDA driver requires --team-id for code signing (real devices only)\n" +
+				"Usage: maestro-runner --platform ios --team-id <APPLE_TEAM_ID> test <flow-files>\n" +
+				"Note: --team-id is not required for simulators")
 		}
 		if cfg.AppFile == "" && flowsUseClearState(flows) {
 			return fmt.Errorf("clearState on iOS requires --app-file to reinstall the app after uninstalling\n" +

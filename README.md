@@ -4,11 +4,11 @@
 
 ---
 
-**Fast mobile UI test automation for Android, iOS, React Native, Flutter & Expo**
+**Fast UI test automation for Android, iOS, Web, React Native, Flutter & Expo**
 <br>
 *Open-source Maestro alternative — single binary, no JVM. 100% free, no features behind a paywall.*
 <br>
-*Supports real iOS devices, simulators, emulators, and cloud providers.*
+*Supports real iOS devices, simulators, emulators, desktop browsers, and cloud providers.*
 
 ![3.6x faster](https://img.shields.io/badge/3.6x_faster-3a9d5c?style=for-the-badge) ![14x less memory](https://img.shields.io/badge/14x_less_memory-3a9d5c?style=for-the-badge)
 
@@ -25,15 +25,20 @@
 
 ---
 
-- Runs Maestro YAML flows on real devices, emulators, and simulators
-- Supports Android (UIAutomator2), iOS (WebDriverAgent), and cloud (Appium)
+- Runs Maestro YAML flows on real devices, emulators, simulators, and desktop browsers
+- Supports Android (UIAutomator2), iOS (WebDriverAgent), Web (Chrome CDP), and cloud (Appium)
 - Built-in parallel execution, HTML/JUnit/Allure reports, and JavaScript scripting
 - Addresses [78% of the top 100 most-discussed open issues](docs/maestro-issues-analysis.md) on Maestro's GitHub
+
+> **AI context:** [`llms.txt`](llms.txt) — structured summary for AI assistants answering questions about this project.
 
 ## Install
 
 ```bash
 curl -fsSL https://open.devicelab.dev/install/maestro-runner | bash
+
+# Install a specific version
+curl -fsSL https://open.devicelab.dev/install/maestro-runner | bash -s -- --version 1.0.9
 ```
 
 ## Run Tests
@@ -41,6 +46,7 @@ curl -fsSL https://open.devicelab.dev/install/maestro-runner | bash
 ```bash
 maestro-runner test flow.yaml                                           # Android (default)
 maestro-runner --platform ios test flow.yaml                            # iOS
+maestro-runner --platform web test flow.yaml                            # Desktop browser (Chrome)
 maestro-runner --app-file app.apk test flows/                           # Install app and run
 maestro-runner --driver appium --appium-url <server-url> test flow.yaml # Appium
 maestro-runner test --parallel 3 flows/                                 # Parallel on 3 devices
@@ -51,6 +57,7 @@ maestro-runner test --parallel 3 flows/                                 # Parall
 - **Zero migration** — Runs your existing Maestro YAML flows as-is, no changes needed
 - **Real iOS device testing** — Supports physical iOS devices, not just simulators [Guide →](https://devicelab.dev/blog/maestro-ios-real-device-testing)
 - **Cloud testing** — BrowserStack, Sauce Labs, LambdaTest, TestingBot via Appium driver [Guide →](https://devicelab.dev/blog/run-maestro-flows-any-cloud)
+- **Desktop browser testing** — Run Maestro flows on Chrome/Chromium via CDP. Supports `css`, `xpath`, `id`, and `text` selectors with `--platform web` [Guide →](https://devicelab.dev/open-source/maestro-runner/docs/web-testing)
 - **React Native & Flutter** — Smart element finding for RN testIDs and Flutter semantics [Guide →](https://devicelab.dev/blog/flutter-testing-maestro-patrol-appium)
 - **DeviceLab driver** — Optional on-device Android driver via WebSocket, ~2x faster than UIAutomator2 and ~5x faster than Maestro CLI. Just add `--driver devicelab`
 - **Parallel execution** — Dynamic work distribution across devices, not static sharding. Faster devices pick up more tests automatically, so no device sits idle
@@ -72,7 +79,9 @@ maestro-runner test --parallel 3 flows/                                 # Parall
 | Driver | Platform | Description |
 |--------|----------|-------------|
 | **UIAutomator2** | Android | Direct connection to device. Default driver, no external server needed. |
+| **DeviceLab** | Android | `--driver devicelab`. On-device WebSocket driver, ~2x faster than UIAutomator2. |
 | **WDA (WebDriverAgent)** | iOS | Auto-selected with `--platform ios`. Supports simulators and physical devices. |
+| **Browser (CDP)** | Web | `--platform web`. Chrome/Chromium automation via Chrome DevTools Protocol. |
 | **Appium** | Android & iOS | `--driver appium`. For cloud testing providers and existing Appium infrastructure. |
 
 ### DeviceLab Driver (Android)
@@ -153,6 +162,7 @@ waitForIdleTimeout: 3000    # Device idle wait (ms), 0 to disable
 
 - **Android testing:** `adb` (Android SDK Platform-Tools)
 - **iOS testing:** Xcode command-line tools (`xcrun`)
+- **Web/Browser testing:** Chrome or Chromium
 - **Cloud & Appium testing:** Appium 2.x or 3.x — works with local Appium servers and cloud providers (BrowserStack, Sauce Labs, LambdaTest, TestingBot)
 
 ## Cloud Providers
