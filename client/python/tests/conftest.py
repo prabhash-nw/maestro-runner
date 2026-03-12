@@ -6,6 +6,8 @@ instance on a unique port, targeting a specific device (via ANDROID_SERIAL).
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 import logging
 import os
@@ -26,6 +28,7 @@ from maestro_runner import MaestroClient
 
 SERVER_URL = os.environ.get("MAESTRO_SERVER_URL", "http://localhost:9999")
 PLATFORM = os.environ.get("MAESTRO_PLATFORM", "android")
+EXPLICIT_DEVICE_ID = os.environ.get("MAESTRO_DEVICE_ID")
 SERVER_PORT = SERVER_URL.rsplit(":", 1)[-1].rstrip("/")
 
 # Where to find the binary — override with MAESTRO_RUNNER_BIN env var
@@ -34,6 +37,7 @@ _DEFAULT_BIN = os.path.join(
 )
 MAESTRO_RUNNER_BIN = os.environ.get("MAESTRO_RUNNER_BIN", _DEFAULT_BIN)
 REPORTS_DIR = (Path(__file__).resolve().parent.parent / "reports")
+HTML_OVERRIDE_CSS = Path(__file__).resolve().parent / "report-overrides.css"
 _CURRENT_NODE_ID = "-"
 _SESSION_RUN_ID = ""
 _SESSION_WORKER_ID = "master"
@@ -60,6 +64,37 @@ def _active_node_id() -> str:
 
 def _make_run_id(worker_id: str) -> str:
     return f"{_utc_timestamp()}-{worker_id}-{os.getpid()}"
+
+
+def _ensure_session_context(explicit_worker_id: str | None = None) -> tuple[str, str]:
+    global _SESSION_RUN_ID, _SESSION_WORKER_ID
+
+    worker_id = _active_worker_id(explicit_worker_id)
+    if not _SESSION_RUN_ID:
+        _SESSION_RUN_ID = _make_run_id(worker_id)
+        _SESSION_WORKER_ID = worker_id
+    elif not _SESSION_WORKER_ID:
+        _SESSION_WORKER_ID = worker_id
+
+    return _SESSION_RUN_ID, _SESSION_WORKER_ID
+
+
+def _session_run_dir(run_id: str | None = None) -> Path:
+    active_run_id = run_id or _SESSION_RUN_ID
+    return REPORTS_DIR / active_run_id if active_run_id else REPORTS_DIR
+
+
+def _move_shared_pytest_reports(run_dir: Path) -> None:
+    for artifact_name in ("report.html", "junit-report.xml"):
+        shared_path = REPORTS_DIR / artifact_name
+        run_path = run_dir / artifact_name
+        if shared_path.exists() and shared_path != run_path:
+            run_path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(shared_path, run_path)
+
+
+def _relative_run_artifact_path(path: Path) -> str:
+    return str(path.relative_to(_session_run_dir()))
 
 
 _ORIGINAL_RECORD_FACTORY = logging.getLogRecordFactory()
@@ -118,15 +153,16 @@ def _persist_latest_server_metadata(entry: dict[str, str]) -> None:
 
 
 def _setup_persisted_python_logs(worker_id: str, run_id: str) -> None:
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir = _session_run_dir(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
     root_logger = logging.getLogger()
-    handler_name = f"pytest-run-{worker_id}"
+    handler_name = f"pytest-run-{run_id}"
 
     for handler in root_logger.handlers:
         if getattr(handler, "name", "") == handler_name:
             return
 
-    log_path = REPORTS_DIR / f"pytest-run-{run_id}.log"
+    log_path = run_dir / "pytest-run.log"
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.name = handler_name
     file_handler.setLevel(logging.DEBUG)
@@ -163,15 +199,17 @@ def _write_artifact_summary(exit_status: int) -> None:
     if not _SESSION_RUN_ID:
         return
 
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     worker_id = _SESSION_WORKER_ID
     run_id = _SESSION_RUN_ID
+    run_dir = _session_run_dir(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    _move_shared_pytest_reports(run_dir)
     metadata = _resolve_worker_metadata(worker_id)
 
     artifacts: list[dict[str, Any]] = []
     for path in [
-        REPORTS_DIR / "report.html",
-        REPORTS_DIR / "junit-report.xml",
+        run_dir / "report.html",
+        run_dir / "junit-report.xml",
     ]:
         if path.exists():
             artifacts.append(
@@ -182,7 +220,7 @@ def _write_artifact_summary(exit_status: int) -> None:
                 }
             )
 
-    pytest_log_path = REPORTS_DIR / f"pytest-run-{run_id}.log"
+    pytest_log_path = run_dir / "pytest-run.log"
     if pytest_log_path.exists():
         artifacts.append(
             {
@@ -219,7 +257,7 @@ def _write_artifact_summary(exit_status: int) -> None:
             "pytest": _tail_file(pytest_log_path) if pytest_log_path.exists() else "",
         }
 
-    summary_path = REPORTS_DIR / f"artifact-summary-{run_id}.json"
+    summary_path = run_dir / "artifact-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
@@ -252,6 +290,14 @@ def _worker_index(worker_id: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def _server_command(port: str, *, device_id: str | None = None) -> list[str]:
+    command = ["--platform", PLATFORM]
+    if device_id:
+        command.extend(["--device", device_id])
+    command.extend(["server", "--port", port])
+    return command
+
+
 @pytest.fixture(scope="session")
 def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, None]:
     """Ensure a maestro-runner server is available.
@@ -262,17 +308,15 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
 
     Yields (server_url, device_serial_or_None).
     """
-    global _SESSION_RUN_ID, _SESSION_WORKER_ID
-    run_id = _make_run_id(worker_id)
-    _SESSION_RUN_ID = run_id
-    _SESSION_WORKER_ID = worker_id
+    run_id, worker_id = _ensure_session_context(worker_id)
     _setup_persisted_python_logs(worker_id, run_id)
+    run_dir = _session_run_dir(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     # Single-worker mode (no xdist or xdist with -n0)
     if worker_id == "master":
         if _server_is_ready(SERVER_URL):
-            REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-            server_log_path = REPORTS_DIR / f"server-run-{_utc_timestamp()}-{worker_id}.log"
+            server_log_path = run_dir / "server-run.log"
             server_log_path.write_text(
                 "Reused existing maestro-runner server; process stdout/stderr "
                 "owned by external process.\n",
@@ -286,10 +330,11 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
                     "serverPort": SERVER_PORT,
                     "serverLogPath": str(server_log_path),
                     "mode": "reused-existing-server",
+                    **({"deviceId": EXPLICIT_DEVICE_ID} if EXPLICIT_DEVICE_ID else {}),
                     "startedAt": datetime.now(timezone.utc).isoformat(),
                 }
             )
-            yield SERVER_URL, None
+            yield SERVER_URL, EXPLICIT_DEVICE_ID
             return
 
         binary = shutil.which("maestro-runner") or MAESTRO_RUNNER_BIN
@@ -299,13 +344,12 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
                 "Set MAESTRO_RUNNER_BIN or add it to PATH."
             )
 
-        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-        server_log_path = REPORTS_DIR / f"server-run-{_utc_timestamp()}-{worker_id}.log"
+        server_log_path = run_dir / "server-run.log"
         server_log = server_log_path.open("a", encoding="utf-8", buffering=1)
         server_log.write(f"runId={run_id} workerId={worker_id} platform={PLATFORM}\n")
 
         proc = subprocess.Popen(
-            [binary, "--platform", PLATFORM, "server", "--port", SERVER_PORT],
+            [binary, *_server_command(SERVER_PORT, device_id=EXPLICIT_DEVICE_ID)],
             stdout=server_log,
             stderr=subprocess.STDOUT,
         )
@@ -317,6 +361,7 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
                 "serverPort": SERVER_PORT,
                 "serverLogPath": str(server_log_path),
                 "mode": "spawned",
+                **({"deviceId": EXPLICIT_DEVICE_ID} if EXPLICIT_DEVICE_ID else {}),
                 "startedAt": datetime.now(timezone.utc).isoformat(),
             }
         )
@@ -335,7 +380,7 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
             server_log.close()
             pytest.fail("maestro-runner server did not become ready within 30 s")
 
-        yield SERVER_URL, None
+        yield SERVER_URL, EXPLICIT_DEVICE_ID
         proc.terminate()
         proc.wait(timeout=10)
         server_log.write(f"terminated runId={run_id} workerId={worker_id}\n")
@@ -362,8 +407,7 @@ def maestro_server(worker_id: str) -> Generator[tuple[str, str | None], None, No
             "Set MAESTRO_RUNNER_BIN or add it to PATH."
         )
 
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    server_log_path = REPORTS_DIR / f"server-run-{_utc_timestamp()}-{worker_id}.log"
+    server_log_path = run_dir / "server-run.log"
     server_log = server_log_path.open("a", encoding="utf-8", buffering=1)
     server_log.write(
         f"runId={run_id} workerId={worker_id} platform={PLATFORM} "
@@ -422,6 +466,70 @@ def client(maestro_server: tuple[str, str | None]) -> Generator[MaestroClient, N
         yield c
 
 
+def _capture_failure_diagnostics(test_name: str, client: MaestroClient | None) -> dict[str, str]:
+    """Capture server logs, screenshot, and UI dump after a test failure.
+    
+    Stores diagnostics in a run-specific directory: reports/{run_id}/diagnostics/
+    """
+    if not _SESSION_RUN_ID:
+        return {}
+    
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    test_safe = re.sub(r"[^a-zA-Z0-9_-]", "_", test_name)
+    artifacts: dict[str, str] = {}
+    
+    # Create run-specific diagnostics directory
+    run_dir = _session_run_dir() / "diagnostics"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get server log tail
+    worker_metadata = _resolve_worker_metadata(_SESSION_WORKER_ID)
+    server_log_path = Path(str(worker_metadata.get("serverLogPath", "")))
+    if server_log_path.exists():
+        log_content = _tail_file(server_log_path, max_lines=200)
+        log_file = run_dir / f"{test_safe}-{timestamp}-server.log"
+        log_file.write_text(log_content, encoding="utf-8")
+        artifacts["server_log"] = str(log_file)
+        artifacts["server_log_text"] = log_content
+        logging.getLogger(__name__).info(f"✓ Server log captured: {log_file.relative_to(REPORTS_DIR)}")
+    
+    # Capture screenshot and UI dump if client is available
+    if client:
+        try:
+            screenshot_file = run_dir / f"{test_safe}-{timestamp}-screenshot.png"
+            screenshot_data = client.screenshot()
+            screenshot_file.write_bytes(screenshot_data)
+            artifacts["screenshot_file"] = str(screenshot_file)
+            artifacts["screenshot_base64"] = base64.b64encode(screenshot_data).decode("utf-8")
+            logging.getLogger(__name__).info(f"✓ Screenshot captured: {screenshot_file.relative_to(REPORTS_DIR)}")
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Failed to capture screenshot: {e}")
+        
+        try:
+            ui_dump_file = run_dir / f"{test_safe}-{timestamp}-ui-dump.xml"
+            ui_dump = client.view_hierarchy()
+            ui_dump_file.write_text(ui_dump, encoding="utf-8")
+            artifacts["ui_dump"] = str(ui_dump_file)
+            logging.getLogger(__name__).info(f"✓ UI dump captured: {ui_dump_file.relative_to(REPORTS_DIR)}")
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Failed to capture UI dump: {e}")
+
+    return artifacts
+
+
+
+_CURRENT_CLIENT: MaestroClient | None = None
+
+
+@pytest.fixture(autouse=True)
+def _track_client(client: MaestroClient) -> Generator[None, None, None]:
+    """Track the current client for diagnostic capture."""
+    global _CURRENT_CLIENT
+    _CURRENT_CLIENT = client
+    yield
+    _CURRENT_CLIENT = None
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item: pytest.Item) -> None:
     global _CURRENT_NODE_ID
@@ -429,10 +537,157 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
 
 @pytest.hookimpl(tryfirst=True)
+def pytest_configure(config: pytest.Config) -> None:
+    run_id, _ = _ensure_session_context()
+    run_dir = _session_run_dir(run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_css = list(getattr(config.option, "css", []) or [])
+    override_css = str(HTML_OVERRIDE_CSS)
+    if override_css not in existing_css:
+        config.option.css = [*existing_css, override_css]
+
+    if hasattr(config.option, "htmlpath"):
+        config.option.htmlpath = str(run_dir / "report.html")
+    if hasattr(config.option, "xmlpath"):
+        config.option.xmlpath = str(run_dir / "junit-report.xml")
+
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
     del item, nextitem
     global _CURRENT_NODE_ID
     _CURRENT_NODE_ID = "-"
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> Generator[None, None, None]:
+    """Capture diagnostics after test call fails and attach key artifacts to pytest-html."""
+    outcome: Any = yield
+    report = outcome.get_result()
+
+    if report.when != "call" or call.excinfo is None:
+        return
+
+    test_name = item.name
+    logging.getLogger(__name__).error(f"Test {test_name} failed, capturing diagnostics...")
+    captured_artifacts = _capture_failure_diagnostics(test_name, _CURRENT_CLIENT)
+
+    html_plugin = item.config.pluginmanager.getplugin("html")
+    if html_plugin is None:
+        return
+
+    from pytest_html import extras as html_extras
+
+    report_extras = list(getattr(report, "extras", []))
+
+    screenshot_base64 = captured_artifacts.get("screenshot_base64")
+    server_log_text = captured_artifacts.get("server_log_text")
+
+    if screenshot_base64 or server_log_text or getattr(report, "longreprtext", ""):
+        control_buttons: list[str] = []
+
+        if screenshot_base64:
+            control_buttons.append(
+                """
+                <button
+                  type=\"button\"
+                  class=\"report-section-toggle\"
+                  onclick=\"const container=this.closest('td.extra'); const section=container && container.querySelector('.report-screenshot-panel'); if(!section){return;} const hidden=section.classList.toggle('report-section-hidden'); this.textContent=hidden ? 'Show Screenshot' : 'Hide Screenshot';\"
+                >Hide Screenshot</button>
+                """.strip()
+            )
+
+        if server_log_text:
+            control_buttons.append(
+                """
+                <button
+                  type=\"button\"
+                  class=\"report-section-toggle\"
+                  onclick=\"const container=this.closest('td.extra'); const section=container && container.querySelector('.report-server-log'); if(!section){return;} const hidden=section.classList.toggle('report-section-hidden'); this.textContent=hidden ? 'Show Server Log' : 'Hide Server Log';\"
+                >Hide Server Log</button>
+                """.strip()
+            )
+
+        if getattr(report, "longreprtext", ""):
+            control_buttons.append(
+                """
+                <button
+                  type=\"button\"
+                  class=\"report-section-toggle\"
+                  onclick=\"const container=this.closest('td.extra'); const section=container && container.querySelector('.logwrapper'); if(!section){return;} const hidden=section.classList.toggle('report-section-hidden'); this.textContent=hidden ? 'Show Error Details' : 'Hide Error Details';\"
+                >Hide Error Details</button>
+                """.strip()
+            )
+
+        report_extras.append(
+            html_extras.html(
+                (
+                    '<div class="report-section-controls">'
+                    + "".join(control_buttons)
+                    + "</div>"
+                )
+            )
+        )
+
+    if screenshot_base64:
+        report_extras.append(
+            html_extras.html(
+                (
+                    '<div class="report-screenshot-panel">'
+                    '<div class="report-screenshot-panel__title">Screenshot</div>'
+                    '<div class="report-screenshot-frame">'
+                    '<img class="report-screenshot-image" alt="Failure Screenshot" src="data:image/png;base64,'
+                    + screenshot_base64
+                    + '" />'
+                    '</div>'
+                    '</div>'
+                )
+            )
+        )
+
+    if server_log_text:
+        report_extras.append(
+            html_extras.html(
+                (
+                    '<div class="report-server-log">'
+                    '<div class="report-server-log__title">Server Log</div>'
+                    '<pre class="report-server-log__content">'
+                    + html.escape(server_log_text)
+                    + '</pre>'
+                    '</div>'
+                )
+            )
+        )
+
+    screenshot_file = captured_artifacts.get("screenshot_file")
+    if screenshot_file:
+        report_extras.append(
+            html_extras.url(
+                _relative_run_artifact_path(Path(screenshot_file)),
+                name="Screenshot File",
+            )
+        )
+
+    ui_dump = captured_artifacts.get("ui_dump")
+    if ui_dump:
+        report_extras.append(
+            html_extras.url(
+                _relative_run_artifact_path(Path(ui_dump)),
+                name="UI Dump",
+            )
+        )
+
+    server_log = captured_artifacts.get("server_log")
+    if server_log:
+        report_extras.append(
+            html_extras.url(
+                _relative_run_artifact_path(Path(server_log)),
+                name="Server Log",
+            )
+        )
+
+    report.extras = report_extras
 
 
 @pytest.hookimpl(trylast=True)

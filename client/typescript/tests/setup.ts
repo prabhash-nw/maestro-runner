@@ -19,6 +19,7 @@ import { MaestroClient } from "../src";
 
 const BASE_SERVER_URL = process.env.MAESTRO_SERVER_URL ?? "http://localhost:9999";
 const PLATFORM = process.env.MAESTRO_PLATFORM ?? "android";
+const EXPLICIT_DEVICE_ID = process.env.MAESTRO_DEVICE_ID;
 const BASE_PORT = parseInt(new URL(BASE_SERVER_URL).port || "9999", 10);
 
 // Jest assigns JEST_WORKER_ID starting at 1 for each parallel worker
@@ -184,6 +185,15 @@ let serverProcess: ChildProcess | undefined;
 let sharedClient: MaestroClient | undefined;
 let assignedDevice: string | undefined;
 
+function serverCommand(port: number, deviceId?: string): string[] {
+  const command = ["--platform", PLATFORM];
+  if (deviceId) {
+    command.push("--device", deviceId);
+  }
+  command.push("server", "--port", String(port));
+  return command;
+}
+
 /**
  * Ensure a maestro-runner server is available. Starts one if needed.
  * Returns the server URL.
@@ -218,21 +228,25 @@ export async function ensureServer(): Promise<string> {
   }
 
   // Discover devices and assign one to this worker
-  const devices = discoverDevices();
-  const idx = WORKER_ID - 1;
-  if (idx < devices.length) {
-    assignedDevice = devices[idx];
+  if (EXPLICIT_DEVICE_ID) {
+    assignedDevice = EXPLICIT_DEVICE_ID;
+  } else if (PLATFORM === "android") {
+    const devices = discoverDevices();
+    const idx = WORKER_ID - 1;
+    if (idx < devices.length) {
+      assignedDevice = devices[idx];
+    }
   }
 
   serverProcess = spawn(
     binary,
-    ["--platform", PLATFORM, "server", "--port", String(SERVER_PORT)],
+    serverCommand(SERVER_PORT, assignedDevice),
     {
       stdio: "pipe",
       env: {
         ...process.env,
         MAESTRO_WORKER_ID: WORKER_NAME,
-        ...(assignedDevice ? { ANDROID_SERIAL: assignedDevice } : {}),
+        ...(assignedDevice && PLATFORM === "android" ? { ANDROID_SERIAL: assignedDevice } : {}),
       },
     },
   );
