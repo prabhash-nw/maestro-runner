@@ -5,7 +5,7 @@ description: >
   into the current branch. Use this skill when you need to sync your local branch
   with the latest changes from the official maestro-runner repository. Handles
   conflict resolution, provides merge status, and ensures a clean merge workflow.
-allowed-tools: "Bash(git:*) Bash(grep:*) Bash(echo:*)"
+allowed-tools: "Bash(git:*) Bash(grep:*) Bash(echo:*) Bash(make:*) Bash(go:*) Bash(npm:*) Bash(python:*) Bash(pytest:*)"
 metadata:
   author: maestro-runner
   version: 1.0.0
@@ -119,6 +119,59 @@ git log --oneline --graph -10
 
 # Confirm changes were integrated
 git diff origin/<your-branch>..HEAD
+```
+
+## Show What Changed From Upstream
+
+After merging, summarize which features/fixes were pulled in.
+
+```sh
+# Files changed by the upstream merge (or latest upstream sync)
+git diff --name-status HEAD@{1}..HEAD
+
+# Commit-level summary of what arrived from upstream
+git log --oneline --no-merges HEAD@{1}..HEAD
+
+# Optional: richer summary grouped by commit and touched files
+git log --stat --no-merges HEAD@{1}..HEAD
+```
+
+If the merge result is "Already up to date", use this comparison to inspect recent
+upstream changes and verify there is nothing new missing on your branch:
+
+```sh
+git log --oneline --no-merges HEAD..upstream/main
+```
+
+## Run Unit Tests After Merge
+
+Always run unit tests after a merge to catch integration regressions early.
+
+```sh
+# Preferred repo command
+make test
+
+# Equivalent direct Go command
+go test -v ./...
+```
+
+Optional deeper validation:
+
+```sh
+make test-race
+make test-coverage-check
+```
+
+## Run Client Unit Tests After Merge
+
+Also validate both client SDKs so upstream changes do not break client behavior.
+
+```sh
+# TypeScript client unit tests
+cd client/typescript && npm run test:unit
+
+# Python client unit tests (project venv)
+cd client/python && ./.venv/bin/python -m pytest tests/test_client.py tests/test_models.py -v
 ```
 
 ## Troubleshooting
