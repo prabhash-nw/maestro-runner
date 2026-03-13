@@ -211,8 +211,27 @@ def hide_keyboard(*, strategy: str | None = None, label: str | None = None) -> d
     return step
 
 
-def wait_for_animation_to_end(*, label: str | None = None) -> dict[str, Any]:
+def wait_for_animation_to_end(
+    *,
+    sleep_ms: int | None = None,
+    threshold: float | None = None,
+    label: str | None = None,
+) -> dict[str, Any]:
+    """Build a waitForAnimationToEnd step.
+
+    Args:
+        sleep_ms:  Milliseconds to pause between the two comparison screenshots.
+                   Longer values catch slow-moving animations.  Defaults to 200 ms
+                   on the server side.
+        threshold: Maximum pixel-diff percentage (0.0–1.0) still considered static.
+                   Lower is stricter.  Defaults to 0.005 (0.5 %) on the server side.
+        label:     Optional step label shown in reports.
+    """
     step: dict[str, Any] = {"type": "waitForAnimationToEnd"}
+    if sleep_ms is not None:
+        step["sleepMs"] = sleep_ms
+    if threshold is not None:
+        step["threshold"] = threshold
     if label is not None:
         step["label"] = label
     return step

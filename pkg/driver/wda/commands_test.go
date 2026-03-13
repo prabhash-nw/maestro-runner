@@ -1,7 +1,12 @@
 package wda
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -3145,21 +3150,81 @@ func TestOpenLinkEmpty(t *testing.T) {
 // waitForAnimationToEnd test
 // =============================================================================
 
-// TestWaitForAnimationToEndReturnsWarning tests that waitForAnimationToEnd returns success with WARNING.
-func TestWaitForAnimationToEndReturnsWarning(t *testing.T) {
-	driver := &Driver{
-		client: &Client{},
-		info:   &core.PlatformInfo{Platform: "ios"},
-	}
+// makeMinimalPNG returns a 1x1 PNG with the given RGBA colour as a raw byte slice.
+func makeMinimalPNG(r, g, b, a uint8) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	img.SetRGBA(0, 0, color.RGBA{R: r, G: g, B: b, A: a})
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
 
+// TestWaitForAnimationToEndTimesOut verifies that when screenshots always differ
+// (animation never stops) the function times out and returns success=false.
+func TestWaitForAnimationToEndTimesOut(t *testing.T) {
+	call := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/screenshot") {
+			// Alternate between two different pixels so diff is never zero
+			call++
+			var pngData []byte
+			if call%2 == 0 {
+				pngData = makeMinimalPNG(0, 0, 0, 255)
+			} else {
+				pngData = makeMinimalPNG(255, 255, 255, 255)
+			}
+			jsonResponse(w, map[string]interface{}{
+				"value": base64.StdEncoding.EncodeToString(pngData),
+			})
+			return
+		}
+		jsonResponse(w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+
+	driver := createTestDriver(server)
+	// Use a short timeout so the test completes quickly
 	step := &flow.WaitForAnimationToEndStep{}
+	step.TimeoutMs = 500
+	step.Threshold = 0.0001
+
+	result := driver.waitForAnimationToEnd(step)
+
+	if result.Success {
+		t.Fatalf("Expected failure (timeout), got success. Message: %s", result.Message)
+	}
+	if !strings.Contains(result.Message, "Timed out") {
+		t.Errorf("Expected 'Timed out' in message, got: %s", result.Message)
+	}
+}
+
+// TestWaitForAnimationToEndSettles verifies that when consecutive screenshots are
+// identical (screen is static) the function returns success=true.
+func TestWaitForAnimationToEndSettles(t *testing.T) {
+	staticPNG := makeMinimalPNG(128, 128, 128, 255)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/screenshot") {
+			jsonResponse(w, map[string]interface{}{
+				"value": base64.StdEncoding.EncodeToString(staticPNG),
+			})
+			return
+		}
+		jsonResponse(w, map[string]interface{}{"status": 0})
+	}))
+	defer server.Close()
+
+	driver := createTestDriver(server)
+	step := &flow.WaitForAnimationToEndStep{}
+	step.TimeoutMs = 3000
+	step.Threshold = 0.001
+
 	result := driver.waitForAnimationToEnd(step)
 
 	if !result.Success {
-		t.Fatalf("Expected success, got: %s", result.Message)
+		t.Fatalf("Expected success (screen static), got failure. Message: %s", result.Message)
 	}
-	if !strings.Contains(result.Message, "WARNING") {
-		t.Errorf("Expected 'WARNING' in message, got: %s", result.Message)
+	if !strings.Contains(result.Message, "Animation ended") {
+		t.Errorf("Expected 'Animation ended' in message, got: %s", result.Message)
 	}
 }
 

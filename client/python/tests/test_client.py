@@ -484,3 +484,26 @@ class TestDeviceQueries:
         )
         with pytest.raises(MaestroError, match="source failed"):
             client.view_hierarchy()
+
+
+# ── waitForAnimationToEnd ────────────────────────────────────────────────
+
+
+class TestWaitForAnimationToEnd:
+    def test_default_params(self, mock):
+        client = _make_client(mock)
+        mock.post(f"{BASE}/session/{SID}/execute", json={"success": True})
+        client.wait_for_animation_to_end()
+        body = mock.last_request.json()
+        assert body["type"] == "waitForAnimationToEnd"
+        assert "sleepMs" not in body
+        assert "threshold" not in body
+
+    def test_with_sleep_ms_and_threshold(self, mock):
+        client = _make_client(mock)
+        mock.post(f"{BASE}/session/{SID}/execute", json={"success": True})
+        client.wait_for_animation_to_end(sleep_ms=500, threshold=0.001)
+        body = mock.last_request.json()
+        assert body["type"] == "waitForAnimationToEnd"
+        assert body["sleepMs"] == 500
+        assert body["threshold"] == 0.001

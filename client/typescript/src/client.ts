@@ -175,8 +175,12 @@ export class MaestroClient {
     return this.exec(commands.hideKeyboard(strategy, label));
   }
 
-  async waitForAnimationToEnd(label?: string): Promise<ExecutionResult> {
-    return this.exec(commands.waitForAnimationToEnd(label));
+  async waitForAnimationToEnd(
+    sleepMs?: number,
+    threshold?: number,
+    label?: string,
+  ): Promise<ExecutionResult> {
+    return this.exec(commands.waitForAnimationToEnd(sleepMs, threshold, label));
   }
 
   // --- Scroll / Swipe ---

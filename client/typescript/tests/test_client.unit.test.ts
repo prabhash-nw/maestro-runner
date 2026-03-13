@@ -222,4 +222,34 @@ describe("MaestroClient (unit)", () => {
 
     expect(source).toContain("hierarchy");
   });
+
+  it("waitForAnimationToEnd sends correct step type", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: SID }))
+      .mockResolvedValueOnce(jsonResponse(200, { success: true }));
+
+    const client = new MaestroClient(BASE);
+    await client.createSession({ platformName: "android" });
+    await client.waitForAnimationToEnd();
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1]?.body as string);
+    expect(body.type).toBe("waitForAnimationToEnd");
+    expect(body.sleepMs).toBeUndefined();
+    expect(body.threshold).toBeUndefined();
+  });
+
+  it("waitForAnimationToEnd forwards sleepMs and threshold", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: SID }))
+      .mockResolvedValueOnce(jsonResponse(200, { success: true }));
+
+    const client = new MaestroClient(BASE);
+    await client.createSession({ platformName: "android" });
+    await client.waitForAnimationToEnd(500, 0.001);
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1]?.body as string);
+    expect(body.type).toBe("waitForAnimationToEnd");
+    expect(body.sleepMs).toBe(500);
+    expect(body.threshold).toBe(0.001);
+  });
 });

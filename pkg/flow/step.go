@@ -756,6 +756,14 @@ type PressKeyStep struct {
 // WaitForAnimationToEndStep waits for animations.
 type WaitForAnimationToEndStep struct {
 	BaseStep `yaml:",inline" json:",inline"`
+	// SleepMs is the pause inserted between the two consecutive screenshots used
+	// to detect motion.  A longer sleep catches slow-moving animations; a shorter
+	// sleep speeds up detection of fast-settling screens.  Defaults to 200 ms.
+	SleepMs int `yaml:"sleepMs" json:"sleepMs,omitempty"`
+	// Threshold is the maximum pixel-difference percentage (0.0–1.0) that is
+	// still considered "static".  Lower values are stricter.  Defaults to 0.005
+	// (0.5 %).
+	Threshold float64 `yaml:"threshold" json:"threshold,omitempty"`
 }
 
 // DefineVariablesStep defines variables.

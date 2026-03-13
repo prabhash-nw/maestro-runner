@@ -101,8 +101,14 @@ export function hideKeyboard(strategy?: string, label?: string): Step {
   return step;
 }
 
-export function waitForAnimationToEnd(label?: string): Step {
+export function waitForAnimationToEnd(
+  sleepMs?: number,
+  threshold?: number,
+  label?: string,
+): Step {
   const step: Step = { type: "waitForAnimationToEnd" };
+  if (sleepMs != null) step.sleepMs = sleepMs;
+  if (threshold != null) step.threshold = threshold;
   if (label != null) step.label = label;
   return step;
 }

@@ -996,8 +996,11 @@ func TestStopRecordingSuccess(t *testing.T) {
 // ============================================================================
 
 func TestWaitForAnimationToEndSuccess(t *testing.T) {
-	driver := &Driver{}
-	step := &flow.WaitForAnimationToEndStep{}
+	// Use a mock client that returns identical bytes so the static-screen check
+	// resolves immediately via the bytes.Equal fast path.
+	mock := &MockUIA2Client{screenshotData: []byte("fake-identical-data")}
+	driver := &Driver{client: mock}
+	step := &flow.WaitForAnimationToEndStep{BaseStep: flow.BaseStep{TimeoutMs: 1000}}
 
 	result := driver.waitForAnimationToEnd(step)
 

@@ -201,8 +201,16 @@ class MaestroClient:
     ) -> ExecutionResult:
         return self._exec(commands.hide_keyboard(strategy=strategy, label=label))
 
-    def wait_for_animation_to_end(self, *, label: str | None = None) -> ExecutionResult:
-        return self._exec(commands.wait_for_animation_to_end(label=label))
+    def wait_for_animation_to_end(
+        self,
+        *,
+        sleep_ms: int | None = None,
+        threshold: float | None = None,
+        label: str | None = None,
+    ) -> ExecutionResult:
+        return self._exec(commands.wait_for_animation_to_end(
+            sleep_ms=sleep_ms, threshold=threshold, label=label
+        ))
 
     # --- Scroll / Swipe ---
 

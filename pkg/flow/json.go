@@ -281,6 +281,9 @@ func unmarshalStepByType(stepType StepType, data []byte) (Step, error) {
 
 	case StepWaitForAnimationToEnd:
 		var s WaitForAnimationToEndStep
+		if err := json.Unmarshal(data, &s); err != nil {
+			return nil, err
+		}
 		s.StepType = stepType
 		return &s, nil
 

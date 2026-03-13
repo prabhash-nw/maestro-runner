@@ -1,8 +1,12 @@
 package wda
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"image"
+	"image/png"
+	"math"
 	"os/exec"
 	"strings"
 	"sync"
@@ -11,6 +15,13 @@ import (
 	"github.com/devicelab-dev/maestro-runner/pkg/core"
 	"github.com/devicelab-dev/maestro-runner/pkg/flow"
 	"github.com/devicelab-dev/maestro-runner/pkg/logger"
+)
+
+const (
+	defaultAnimationTimeoutMs = 15000
+	defaultAnimationSleepMs   = 200   // pause between the two comparison screenshots
+	screenshotDiffThreshold   = 0.005 // 0.5 % — default pixel-diff threshold
+	screenshotRetryIntervalMs = 100   // outer loop retry interval
 )
 
 // Tap commands
@@ -510,7 +521,7 @@ func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
 		centerY := areaY + areaH/2
 		swipeDistance := areaH / 3
 
-		switch step.Direction {
+		switch strings.ToLower(step.Direction) {
 		case "up":
 			fromX, fromY = centerX, centerY+swipeDistance/2
 			toX, toY = centerX, centerY-swipeDistance/2
@@ -926,11 +937,36 @@ func (d *Driver) openLink(step *flow.OpenLinkStep) *core.CommandResult {
 		return errorResult(fmt.Errorf("no link specified"), "No link to open")
 	}
 
-	// Use WDA deep link - works for both simulator and real device
-	// Note: browser parameter would require launching Safari explicitly
-	// WDA's DeepLink uses the system handler which respects app associations
-	if err := d.client.DeepLink(link); err != nil {
-		return errorResult(err, fmt.Sprintf("Failed to open link: %s", link))
+	// For simulators, xcrun simctl openurl is more reliable than WDA DeepLink
+	// because DeepLink requires an active WDA session (launched app).
+	if d.info != nil && d.info.IsSimulator {
+		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, link)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errorResult(fmt.Errorf("%w: %s", err, out), fmt.Sprintf("Failed to open link: %s", link))
+		}
+		// Ensure a WDA Safari session exists so subsequent driver calls
+		// (swipe, tap, screenshot, etc.) have an active session to operate on.
+		if !d.client.HasSession() && (strings.HasPrefix(link, "http://") || strings.HasPrefix(link, "https://")) {
+			if err := d.client.CreateSession("com.apple.mobilesafari", d.alertAction); err != nil {
+				logger.Debug("openLink: could not create Safari WDA session: %v", err)
+			}
+		}
+		// fall through to AutoVerify / return below
+	} else {
+		// Real device: WDA DeepLink requires an active session — create a Safari session
+		// for http/https URLs if none exists.
+		if !d.client.HasSession() {
+			bundleID := "com.apple.mobilesafari"
+			if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+				bundleID = "" // deep-link — let WDA use the system handler
+			}
+			if err := d.client.CreateSession(bundleID, d.alertAction); err != nil {
+				return errorResult(err, fmt.Sprintf("Failed to create session for link: %s", link))
+			}
+		}
+		if err := d.client.DeepLink(link); err != nil {
+			return errorResult(err, fmt.Sprintf("Failed to open link: %s", link))
+		}
 	}
 
 	// If autoVerify is enabled, wait briefly for page load
@@ -951,9 +987,20 @@ func (d *Driver) openBrowser(step *flow.OpenBrowserStep) *core.CommandResult {
 		return errorResult(fmt.Errorf("no URL specified"), "No URL to open")
 	}
 
-	// Use WDA deep link - opens in Safari for http/https URLs
-	if err := d.client.DeepLink(url); err != nil {
-		return errorResult(err, fmt.Sprintf("Failed to open browser: %s", url))
+	if d.info != nil && d.info.IsSimulator {
+		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, url)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return errorResult(fmt.Errorf("%w: %s", err, out), fmt.Sprintf("Failed to open browser: %s", url))
+		}
+	} else {
+		if !d.client.HasSession() {
+			if err := d.client.CreateSession("com.apple.mobilesafari", d.alertAction); err != nil {
+				return errorResult(err, fmt.Sprintf("Failed to create session for browser: %s", url))
+			}
+		}
+		if err := d.client.DeepLink(url); err != nil {
+			return errorResult(err, fmt.Sprintf("Failed to open browser: %s", url))
+		}
 	}
 
 	return successResult(fmt.Sprintf("Opened browser: %s", url), nil)
@@ -1013,14 +1060,157 @@ func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
 	}
 }
 
-func (d *Driver) waitForAnimationToEnd(_ *flow.WaitForAnimationToEndStep) *core.CommandResult {
-	// NOTE: waitForAnimationToEnd is not fully implemented.
-	// Maestro uses screenshot comparison which is complex to implement correctly.
-	// For now, we pass this step with a warning.
-	return &core.CommandResult{
-		Success: true,
-		Message: "WARNING: waitForAnimationToEnd is not fully implemented - step passed without animation check",
+func (d *Driver) waitForAnimationToEnd(step *flow.WaitForAnimationToEndStep) *core.CommandResult {
+	timeoutMs := step.TimeoutMs
+	if timeoutMs <= 0 {
+		timeoutMs = defaultAnimationTimeoutMs
 	}
+
+	sleepMs := step.SleepMs
+	if sleepMs <= 0 {
+		sleepMs = defaultAnimationSleepMs
+	}
+
+	threshold := step.Threshold
+	if threshold <= 0 {
+		threshold = screenshotDiffThreshold
+	}
+
+	logger.Info("waitForAnimationToEnd starting: timeoutMs=%d sleepMs=%d threshold=%.4f",
+		timeoutMs, sleepMs, threshold)
+
+	settled, iterations, elapsed, allDiffs := d.waitUntilScreenIsStatic(
+		time.Duration(timeoutMs)*time.Millisecond,
+		time.Duration(sleepMs)*time.Millisecond,
+		threshold,
+	)
+
+	if settled {
+		logger.Info("waitForAnimationToEnd: screen became static after %d iteration(s) (%.0fms elapsed), diffs=%s",
+			iterations, elapsed.Seconds()*1000, formatAnimationDiffs(allDiffs))
+		return successResult(
+			fmt.Sprintf("Animation ended (screen became static) after %d iteration(s) in %.0fms, diffs=%s",
+				iterations, elapsed.Seconds()*1000, formatAnimationDiffs(allDiffs)),
+			nil,
+		)
+	}
+
+	logger.Info("waitForAnimationToEnd: timed out after %d iteration(s) (%.0fms), diffs=%s threshold=%.4f",
+		iterations, elapsed.Seconds()*1000, formatAnimationDiffs(allDiffs), threshold)
+	return &core.CommandResult{
+		Success: false,
+		Message: fmt.Sprintf(
+			"Timed out after %dms (%d iteration(s)) waiting for screen to become static; diffs=%s threshold=%.4f",
+			timeoutMs, iterations, formatAnimationDiffs(allDiffs), threshold,
+		),
+	}
+}
+
+// formatAnimationDiffs formats a slice of diff values as "[0.000764 0.000821 ...]"
+func formatAnimationDiffs(diffs []float64) string {
+	if len(diffs) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(diffs))
+	for i, d := range diffs {
+		parts[i] = fmt.Sprintf("%.6f", d)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
+// waitUntilScreenIsStatic polls until two consecutive screenshots taken sleep
+// apart are pixel-similar within threshold, or the deadline is reached.
+// Returns: (settled, iterations, elapsed, allDiffs).
+func (d *Driver) waitUntilScreenIsStatic(timeout, sleep time.Duration, threshold float64) (bool, int, time.Duration, []float64) {
+	start := time.Now()
+	deadline := start.Add(timeout)
+	var allDiffs []float64
+	i := 0
+	for time.Now().Before(deadline) {
+		i++
+		diff, err := d.consecutiveScreenshotDiff(sleep)
+		if err != nil {
+			logger.Debug("waitForAnimationToEnd iter=%d screenshot error: %v", i, err)
+			time.Sleep(time.Duration(screenshotRetryIntervalMs) * time.Millisecond)
+			continue
+		}
+		allDiffs = append(allDiffs, diff)
+		elapsed := time.Since(start)
+		logger.Debug("waitForAnimationToEnd iter=%d elapsed=%.0fms diff=%.6f threshold=%.4f",
+			i, elapsed.Seconds()*1000, diff, threshold)
+		if diff <= threshold {
+			return true, i, elapsed, allDiffs
+		}
+		time.Sleep(time.Duration(screenshotRetryIntervalMs) * time.Millisecond)
+	}
+	return false, i, time.Since(start), allDiffs
+}
+
+// consecutiveScreenshotDiff takes two screenshots separated by sleep and
+// returns the pixel-diff percentage.  Returns (0, nil) if bytes are identical.
+func (d *Driver) consecutiveScreenshotDiff(sleep time.Duration) (float64, error) {
+	startBytes, err := d.client.Screenshot()
+	if err != nil {
+		return 0, fmt.Errorf("screenshot 1: %w", err)
+	}
+
+	time.Sleep(sleep)
+
+	endBytes, err := d.client.Screenshot()
+	if err != nil {
+		return 0, fmt.Errorf("screenshot 2: %w", err)
+	}
+
+	// Fast path: identical bytes — definitely static.
+	if bytes.Equal(startBytes, endBytes) {
+		return 0, nil
+	}
+
+	startImg, err := png.Decode(bytes.NewReader(startBytes))
+	if err != nil {
+		return 0, fmt.Errorf("decode screenshot 1: %w", err)
+	}
+	endImg, err := png.Decode(bytes.NewReader(endBytes))
+	if err != nil {
+		return 0, fmt.Errorf("decode screenshot 2: %w", err)
+	}
+
+	startBounds := startImg.Bounds()
+	endBounds := endImg.Bounds()
+	if startBounds.Dx() != endBounds.Dx() || startBounds.Dy() != endBounds.Dy() {
+		// Dimensions changed — treat as maximally different.
+		return 1.0, nil
+	}
+
+	return screenshotDifferencePercent(startImg, endImg), nil
+}
+
+func screenshotDifferencePercent(a, b image.Image) float64 {
+	ab := a.Bounds()
+	bb := b.Bounds()
+	width := ab.Dx()
+	height := ab.Dy()
+	if width <= 0 || height <= 0 || width != bb.Dx() || height != bb.Dy() {
+		return 1.0
+	}
+
+	var totalDiff float64
+	const maxChannel = 65535.0
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			ar, ag, ab, aa := a.At(ab.Min.X+x, ab.Min.Y+y).RGBA()
+			br, bg, bb, ba := b.At(bb.Min.X+x, bb.Min.Y+y).RGBA()
+
+			totalDiff += math.Abs(float64(ar) - float64(br))
+			totalDiff += math.Abs(float64(ag) - float64(bg))
+			totalDiff += math.Abs(float64(ab) - float64(bb))
+			totalDiff += math.Abs(float64(aa) - float64(ba))
+		}
+	}
+
+	channels := float64(width*height) * 4.0
+	return totalDiff / (channels * maxChannel)
 }
 
 // Media
