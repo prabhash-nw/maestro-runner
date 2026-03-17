@@ -117,6 +117,20 @@ describe("MaestroClient (unit)", () => {
     expect(body.selector).toEqual({ text: "Item", childOf: { id: "list" } });
   });
 
+  it("assertVisible supports textPattern as textRegex", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: SID }))
+      .mockResolvedValueOnce(jsonResponse(200, { success: true }));
+
+    const client = new MaestroClient(BASE);
+    await client.createSession({ platformName: "android" });
+    await client.assertVisible({ textPattern: ".*Alice.*Tester.*" });
+
+    const body = JSON.parse(fetchMock.mock.calls[1][1]?.body as string);
+    expect(body.type).toBe("assertVisible");
+    expect(body.selector).toEqual({ textRegex: ".*Alice.*Tester.*" });
+  });
+
   it("raises StepError on non-optional step failure", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(200, { sessionId: SID }))

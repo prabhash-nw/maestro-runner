@@ -27,6 +27,10 @@ class TestElementSelector:
         sel = ElementSelector(css=".btn", traits="button")
         assert sel.to_dict() == {"css": ".btn", "traits": "button"}
 
+    def test_to_dict_text_regex(self):
+        sel = ElementSelector(text_regex=".*Alice.*Tester.*")
+        assert sel.to_dict() == {"textRegex": ".*Alice.*Tester.*"}
+
     def test_to_dict_nested_child_of(self):
         parent = ElementSelector(id="list")
         child = ElementSelector(text="Item 1", child_of=parent)

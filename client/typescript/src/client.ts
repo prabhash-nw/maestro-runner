@@ -219,16 +219,39 @@ export class MaestroClient {
 
   async assertVisible(opts: {
     text?: string;
+    textPattern?: string;
     id?: string;
     selector?: ElementSelector;
     timeoutMs?: number;
     label?: string;
   }): Promise<ExecutionResult> {
-    return this.exec(commands.assertVisible(opts));
+    if (opts.selector) {
+      return this.exec(commands.assertVisible({
+        selector: opts.selector,
+        timeoutMs: opts.timeoutMs,
+        label: opts.label,
+      }));
+    }
+
+    if (opts.textPattern) {
+      return this.exec(commands.assertVisible({
+        textPattern: opts.textPattern,
+        timeoutMs: opts.timeoutMs,
+        label: opts.label,
+      }));
+    }
+
+    return this.exec(commands.assertVisible({
+      text: opts.text,
+      id: opts.id,
+      timeoutMs: opts.timeoutMs,
+      label: opts.label,
+    }));
   }
 
   async assertNotVisible(opts: {
     text?: string;
+    textPattern?: string;
     id?: string;
     selector?: ElementSelector;
     timeoutMs?: number;
@@ -237,7 +260,7 @@ export class MaestroClient {
     return this.exec(commands.assertNotVisible(opts));
   }
 
-  async elementExists(opts: { text?: string; id?: string }): Promise<boolean> {
+  async elementExists(opts: { text?: string; textPattern?: string; id?: string }): Promise<boolean> {
     const step = commands.assertVisible({ ...opts, optional: true });
     const result = await this.executeStep(step);
     return result.success;
