@@ -29,7 +29,6 @@ afterAll(async () => {
 describe("WaitForAnimationToEnd (settles)", () => {
   it("should settle after app launch", async () => {
     const client = await getClient();
-
     await client.launchApp("com.android.settings", { clearState: false });
 
     // Should not throw; returns success=true once screen becomes static
@@ -41,7 +40,6 @@ describe("WaitForAnimationToEnd (settles)", () => {
 
   it("should settle after navigation", async () => {
     const client = await getClient();
-
     await client.tap({ text: "Display" });
 
     const result = await client.waitForAnimationToEnd();
@@ -52,7 +50,6 @@ describe("WaitForAnimationToEnd (settles)", () => {
 
   it("should settle immediately on already-static screen", async () => {
     const client = await getClient();
-
     const result = await client.waitForAnimationToEnd();
     expect(result.success).toBe(true);
     console.log(`  waitForAnimationToEnd (static) message: ${result.message}`);

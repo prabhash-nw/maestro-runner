@@ -88,7 +88,10 @@ export class MaestroClient {
   private async exec(step: Step): Promise<ExecutionResult> {
     const result = await this.executeStep(step);
     if (!result.success && !step.optional) {
-      throw new StepError(result.message ?? "step failed");
+      const reason = result.message ?? "step failed";
+      throw new StepError(
+        `Step failed (${this.describeStep(step)}): ${reason}\nstep=${this.safeStringify(step)}`,
+      );
     }
     return result;
   }
@@ -340,5 +343,24 @@ export class MaestroClient {
       headers: { ...headers, ...(init?.headers as Record<string, string>) },
       signal: AbortSignal.timeout(this.timeout),
     });
+  }
+
+  private describeStep(step: Step): string {
+    const type = typeof step.type === "string" ? step.type : "unknown";
+    const label = typeof step.label === "string" ? ` label=${JSON.stringify(step.label)}` : "";
+    const selector = step.selector !== undefined
+      ? ` selector=${this.safeStringify(step.selector)}`
+      : "";
+    const text = typeof step.text === "string" ? ` text=${JSON.stringify(step.text)}` : "";
+    const id = typeof step.id === "string" ? ` id=${JSON.stringify(step.id)}` : "";
+    return `type=${type}${label}${selector}${text}${id}`;
+  }
+
+  private safeStringify(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "<unserializable>";
+    }
   }
 }
