@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import pytest
 from maestro_runner import MaestroClient
-from maestro_runner.exceptions import StepError
 
 from tests.pages.contact_list_page import ContactListPage
 
