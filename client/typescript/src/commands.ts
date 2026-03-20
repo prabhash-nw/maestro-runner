@@ -7,6 +7,7 @@ type SelectorValue = string | Record<string, unknown>;
 
 function selectorValue(opts: {
   text?: string;
+  textRegex?: string;
   id?: string;
   index?: number;
   selector?: ElementSelector;
@@ -18,6 +19,7 @@ function selectorValue(opts: {
   const d: Record<string, unknown> = {};
   if (opts.selector) Object.assign(d, opts.selector.toDict());
   if (opts.text != null) d.text = opts.text;
+  if (opts.textRegex != null) d.textRegex = opts.textRegex;
   if (opts.id != null) d.id = opts.id;
   if (opts.index != null) d.index = String(opts.index);
   if (opts.enabled != null) d.enabled = opts.enabled;
@@ -115,6 +117,7 @@ export function waitForAnimationToEnd(
 
 export function assertVisible(opts: {
   text?: string;
+  textPattern?: string;
   id?: string;
   selector?: ElementSelector;
   timeoutMs?: number;
@@ -122,7 +125,12 @@ export function assertVisible(opts: {
   label?: string;
 }): Step {
   const step: Step = { type: "assertVisible" };
-  step.selector = selectorValue({ text: opts.text, id: opts.id, selector: opts.selector });
+  step.selector = selectorValue({
+    text: opts.text,
+    textRegex: opts.textPattern,
+    id: opts.id,
+    selector: opts.selector,
+  });
   if (opts.timeoutMs != null) step.timeout = opts.timeoutMs;
   if (opts.optional) step.optional = true;
   if (opts.label != null) step.label = opts.label;
@@ -131,13 +139,19 @@ export function assertVisible(opts: {
 
 export function assertNotVisible(opts: {
   text?: string;
+  textPattern?: string;
   id?: string;
   selector?: ElementSelector;
   timeoutMs?: number;
   label?: string;
 }): Step {
   const step: Step = { type: "assertNotVisible" };
-  step.selector = selectorValue({ text: opts.text, id: opts.id, selector: opts.selector });
+  step.selector = selectorValue({
+    text: opts.text,
+    textRegex: opts.textPattern,
+    id: opts.id,
+    selector: opts.selector,
+  });
   if (opts.timeoutMs != null) step.timeout = opts.timeoutMs;
   if (opts.label != null) step.label = opts.label;
   return step;

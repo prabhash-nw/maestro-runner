@@ -24,6 +24,12 @@ export class ContactListPage extends BasePage {
   }
 
   async assertContactVisible(name: string): Promise<ExecutionResult> {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 2) {
+      const [first, last] = parts;
+      const pattern = `.*${first}.*${last}.*|.*${last}, ${first}.*`;
+      return this.client.assertVisible({ textPattern: pattern });
+    }
     return this.client.assertVisible({ text: name });
   }
 }

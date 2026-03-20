@@ -60,7 +60,6 @@ describe("WaitForAnimationToEnd", () => {
     "should time out on an infinite spinning animation",
     async () => {
       const client = await getClient();
-
       const openResult = await client.openLink(SPINNER_URL);
       expect(openResult.success).toBe(true);
 

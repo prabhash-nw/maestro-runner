@@ -250,31 +250,54 @@ class MaestroClient:
         self,
         *,
         text: str | None = None,
+        text_pattern: str | None = None,
         id: str | None = None,
         selector: ElementSelector | None = None,
         timeout_ms: int | None = None,
         label: str | None = None,
     ) -> ExecutionResult:
         return self._exec(commands.assert_visible(
-            text=text, id=id, selector=selector, timeout_ms=timeout_ms, label=label,
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            selector=selector,
+            timeout_ms=timeout_ms,
+            label=label,
         ))
 
     def assert_not_visible(
         self,
         *,
         text: str | None = None,
+        text_pattern: str | None = None,
         id: str | None = None,
         selector: ElementSelector | None = None,
         timeout_ms: int | None = None,
         label: str | None = None,
     ) -> ExecutionResult:
         return self._exec(commands.assert_not_visible(
-            text=text, id=id, selector=selector, timeout_ms=timeout_ms, label=label,
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            selector=selector,
+            timeout_ms=timeout_ms,
+            label=label,
         ))
 
-    def element_exists(self, *, text: str | None = None, id: str | None = None) -> bool:
+    def element_exists(
+        self,
+        *,
+        text: str | None = None,
+        text_pattern: str | None = None,
+        id: str | None = None,
+    ) -> bool:
         """Check if an element exists without raising. Returns bool."""
-        step = commands.assert_visible(text=text, id=id, optional=True)
+        step = commands.assert_visible(
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            optional=True,
+        )
         result = self.execute_step(step)
         return result.success
 

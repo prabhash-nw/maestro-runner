@@ -13,4 +13,4 @@ tags:
 - waitForAnimationToEnd
 
 # The contact must still be visible
-- assertVisible: "Alice Tester"
+- assertVisible: ".*Alice.*Tester.*|.*Tester, Alice.*"

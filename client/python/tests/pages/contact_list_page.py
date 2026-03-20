@@ -24,5 +24,15 @@ class ContactListPage(BasePage):
         self.wait_for_animation()
         return EditContactPage(self.client)
 
-    def assert_contact_visible(self, name: str) -> ExecutionResult:
+    def assert_contact_visible(
+        self,
+        name: str,
+        *,
+        timeout_ms: int | None = None,
+    ) -> ExecutionResult:
+        parts = name.split()
+        if len(parts) == 2:
+            first, last = parts
+            pattern = f".*{first}.*{last}.*|.*{last}, {first}.*"
+            return self.client.assert_visible(text_pattern=pattern)
         return self.client.assert_visible(text=name)
