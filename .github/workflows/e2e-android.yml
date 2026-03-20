@@ -14,6 +14,8 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  pages: write
+  id-token: write
 
 jobs:
   e2e-android:
@@ -246,6 +248,136 @@ jobs:
             reports/
             ctrf/
           retention-days: 14
+
+      - name: Prepare GitHub Pages site
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p pages
+          cp -R reports pages/reports
+          cp -R ctrf pages/ctrf
+          if [ -d client/python/reports ]; then
+            mkdir -p pages/client/python
+            cp -R client/python/reports pages/client/python/reports
+          fi
+          if [ -d client/typescript/reports ]; then
+            mkdir -p pages/client/typescript
+            cp -R client/typescript/reports pages/client/typescript/reports
+          fi
+
+          cat > pages/index.html << 'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Android E2E Test Reports</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; line-height: 1.5; }
+              h1, h2 { margin-bottom: 0.4rem; }
+              ul { padding-left: 1.2rem; }
+              li { margin: 0.2rem 0; }
+              code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 4px; }
+            </style>
+          </head>
+          <body>
+            <h1>Android E2E Test Reports</h1>
+            <p>Workflow: <code>${{ github.workflow }}</code> | Run: <code>${{ github.run_number }}</code></p>
+
+            <h2>Known report links</h2>
+            <ul>
+              <li><a href="reports/python/junit.xml">Python JUnit XML</a></li>
+              <li><a href="reports/typescript/junit.xml">TypeScript JUnit XML</a></li>
+              <li><a href="client/python/reports/">Python diagnostics reports</a></li>
+              <li><a href="client/typescript/reports/">TypeScript diagnostics reports</a></li>
+            </ul>
+
+            <h2>Browse artifacts</h2>
+            <ul>
+              <li><a href="reports/">reports/</a></li>
+              <li><a href="ctrf/">ctrf/</a></li>
+              <li><a href="client/">client/</a></li>
+            </ul>
+          </body>
+          </html>
+          HTML
+
+      - name: Setup Pages
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/deploy-pages@v4
+
+      - name: Add Pages URL to job summary
+        if: always()
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          if [ "${REPO}" = "${OWNER}.github.io" ]; then
+            PAGE_URL="https://${OWNER}.github.io/"
+          else
+            PAGE_URL="https://${OWNER}.github.io/${REPO}/"
+          fi
+
+          {
+            echo "## GitHub Pages"
+            echo
+            echo "- Reports site: ${PAGE_URL}"
+            if [ "${GITHUB_REF}" = "refs/heads/main" ] && [ -n "${{ steps.deployment.outputs.page_url }}" ]; then
+              echo "- Latest deployment URL: ${{ steps.deployment.outputs.page_url }}"
+            else
+              echo "- Latest deployment URL: only available on main branch runs"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment Pages URL on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pageUrl = repo.toLowerCase() === `${owner.toLowerCase()}.github.io`
+              ? `https://${owner}.github.io/`
+              : `https://${owner}.github.io/${repo}/`;
+
+            const marker = '<!-- e2e-pages-link -->';
+            const body = `${marker}\nAndroid E2E reports page: ${pageUrl}`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (c) => c.user?.type === 'Bot' && typeof c.body === 'string' && c.body.includes(marker),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
       - name: Publish test results
         if: always()
