@@ -75,7 +75,6 @@ jobs:
           cat > /tmp/run-e2e-python.sh << 'SCRIPT'
           #!/usr/bin/env bash
           set -euo pipefail
-          mkdir -p reports/python
 
           DEVICE=$(adb devices | grep -E "emulator-[0-9]+" | head -1 | awk '{print $1}')
           if [ -z "$DEVICE" ]; then
@@ -92,14 +91,13 @@ jobs:
 
           echo "::group::Python e2e tests"
           cd client/python
-          .venv/bin/python -m pytest tests/test_add_contact.py tests/test_contact_persists.py -v --junit-xml=../../reports/python/junit.xml
+          .venv/bin/python -m pytest tests/test_add_contact.py tests/test_contact_persists.py -v
           cd ../..
           echo "::endgroup::"
           SCRIPT
           chmod +x /tmp/run-e2e-python.sh
 
       - name: Run Android E2E suites
-        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -116,8 +114,11 @@ jobs:
           mkdir -p ctrf
 
           # Convert Python e2e JUnit
-          if [ -f reports/python/junit.xml ]; then
-            npx --yes junit-to-ctrf reports/python/junit.xml -o ctrf/python-ctrf.json || true
+          if [ -d client/python/reports ]; then
+            find client/python/reports -name "junit-report.xml" -type f | while read -r f; do
+              name=$(basename "$(dirname "$f")")
+              npx --yes junit-to-ctrf "$f" -o "ctrf/python-${name}-ctrf.json" || true
+            done
           fi
 
       - name: Upload test reports
@@ -126,8 +127,8 @@ jobs:
         with:
           name: e2e-android-reports-${{ github.run_number }}
           path: |
-            reports/
             ctrf/
+            client/python/reports/
           retention-days: 14
 
       - name: Prepare GitHub Pages site
@@ -166,7 +167,6 @@ jobs:
 
             <h2>Known report links</h2>
             <ul>
-              <li><a href="reports/python/junit.xml">Python JUnit XML</a></li>
               <li><a href="client/python/reports/">Python diagnostics reports</a></li>
             </ul>
 
