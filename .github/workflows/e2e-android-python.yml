@@ -1,0 +1,139 @@
+name: E2E Android Python
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-android-python-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  e2e-android-python:
+    name: E2E Android Python (API 36)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      REPORT_SUFFIX: python-android
+      PYTEST_TARGETS: tests/test_add_contact.py tests/test_contact_persists.py tests/test_e2e_android.py
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Required to run Android emulator with hardware acceleration on Linux
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.6'
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/typescript/package-lock.json
+
+      - name: Build maestro-runner
+        run: |
+          go mod download
+          go build -o maestro-runner .
+
+      - name: Install Python client dependencies
+        working-directory: client/python
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[dev]"
+
+      - name: Write Python e2e test script
+        run: |
+          cat > /tmp/run-e2e-python.sh << 'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          DEVICE=$(adb devices | grep -E "emulator-[0-9]+" | head -1 | awk '{print $1}')
+          if [ -z "$DEVICE" ]; then
+            echo "No Android emulator detected"
+            exit 1
+          fi
+          export MAESTRO_DEVICE_ID="$DEVICE"
+          echo "Using device: $DEVICE"
+          adb devices
+
+          adb install -r -g drivers/android/appium-uiautomator2-server-v9.11.1.apk
+          adb install -r -g drivers/android/appium-uiautomator2-server-debug-androidTest.apk
+          adb install -r -g drivers/android/settings_apk-debug.apk
+
+          echo "::group::Python e2e tests"
+          cd client/python
+          mkdir -p "reports/${REPORT_SUFFIX}"
+          .venv/bin/python -m pytest $PYTEST_TARGETS -v --junitxml "reports/${REPORT_SUFFIX}/junit-report.xml"
+          cd ../..
+          echo "::endgroup::"
+          SCRIPT
+          chmod +x /tmp/run-e2e-python.sh
+
+      - name: Run Android Python E2E suite
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -wipe-data -no-snapshot-load -no-boot-anim -netdelay none -netspeed full -no-window -gpu swiftshader_indirect
+          disable-animations: true
+          script: bash /tmp/run-e2e-python.sh
+
+      - name: Generate CTRF report
+        if: always()
+        run: |
+          mkdir -p ctrf
+          JUNIT_FILE="client/python/reports/${REPORT_SUFFIX}/junit-report.xml"
+          if [ -f "$JUNIT_FILE" ]; then
+            npx --yes junit-to-ctrf "$JUNIT_FILE" -o "ctrf/python-${REPORT_SUFFIX}-ctrf.json" || true
+          fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-android-${{ env.REPORT_SUFFIX }}-${{ github.run_number }}
+          path: |
+            ctrf/
+            client/python/reports/${{ env.REPORT_SUFFIX }}/
+          retention-days: 14
+
+      - name: Publish test results
+        if: always()
+        uses: ctrf-io/github-test-reporter@v1
+        with:
+          report-path: 'ctrf/*.json'
+          pull-request-report: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
