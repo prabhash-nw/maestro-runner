@@ -62,6 +62,21 @@ class TestSessionManagement:
         client = MaestroClient(BASE)
         client.close()  # should not raise
 
+    def test_close_twice_deletes_once(self, mock):
+        mock.post(f"{BASE}/session", json={"sessionId": SID})
+        mock.delete(f"{BASE}/session/{SID}", status_code=200)
+        client = MaestroClient(BASE, capabilities={"platformName": "android"})
+
+        client.close()
+        client.close()
+
+        delete_calls = [
+            req
+            for req in mock.request_history
+            if req.method == "DELETE" and req.url == f"{BASE}/session/{SID}"
+        ]
+        assert len(delete_calls) == 1
+
     def test_context_manager(self, mock):
         mock.post(f"{BASE}/session", json={"sessionId": SID})
         mock.delete(f"{BASE}/session/{SID}", status_code=200)

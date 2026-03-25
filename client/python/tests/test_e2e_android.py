@@ -19,16 +19,19 @@ import requests
 SERVER_URL = os.environ.get("MAESTRO_SERVER_URL", "http://localhost:9999")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def session_id():
-    """Create a session at module scope; delete it when done."""
+    """Create a session per test and always release it in teardown."""
     resp = requests.post(f"{SERVER_URL}/session", json={
         "platformName": "android",
     }, timeout=30)
     assert resp.status_code == 200, f"Failed to create session: {resp.text}"
     sid = resp.json()["sessionId"]
-    yield sid
-    requests.delete(f"{SERVER_URL}/session/{sid}")
+    try:
+        yield sid
+    finally:
+        # Best-effort cleanup so device lock is released even when a test fails.
+        requests.delete(f"{SERVER_URL}/session/{sid}", timeout=10)
 
 
 def _execute(session_id: str, step: dict) -> dict:

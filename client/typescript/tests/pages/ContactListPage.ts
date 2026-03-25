@@ -23,13 +23,13 @@ export class ContactListPage extends BasePage {
     return new EditContactPage(this.client);
   }
 
-  async assertContactVisible(name: string): Promise<ExecutionResult> {
+  async assertContactVisible(name: string, timeoutMs?: number): Promise<ExecutionResult> {
     const parts = name.trim().split(/\s+/);
     if (parts.length === 2) {
       const [first, last] = parts;
       const pattern = `.*${first}.*${last}.*|.*${last}, ${first}.*`;
-      return this.client.assertVisible({ textPattern: pattern });
+      return this.client.assertVisible({ textPattern: pattern, timeoutMs });
     }
-    return this.client.assertVisible({ text: name });
+    return this.client.assertVisible({ text: name, timeoutMs });
   }
 }

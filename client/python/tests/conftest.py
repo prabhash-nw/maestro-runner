@@ -526,10 +526,16 @@ _CURRENT_CLIENT: MaestroClient | None = None
 
 
 @pytest.fixture(autouse=True)
-def _track_client(client: MaestroClient) -> Generator[None, None, None]:
-    """Track the current client for diagnostic capture."""
+def _track_client(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+    """Track the current client for diagnostic capture.
+
+    Only bind the shared `client` fixture when the current test actually uses it,
+    so tests that manage sessions manually don't allocate a second device session.
+    """
     global _CURRENT_CLIENT
-    _CURRENT_CLIENT = client
+    _CURRENT_CLIENT = None
+    if "client" in request.fixturenames:
+        _CURRENT_CLIENT = request.getfixturevalue("client")
     yield
     _CURRENT_CLIENT = None
 

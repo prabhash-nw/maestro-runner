@@ -95,7 +95,7 @@ pytest tests/test_client.py tests/test_models.py
 pytest tests/test_add_contact.py tests/test_contact_persists.py -n auto -v
 
 # Run a specific test
-pytest tests/test_add_contact.py::test_add_contact -v
+pytest tests/test_add_contact.py::TestAddContact::test_add_and_verify_contact -v
 ```
 
 ### Environment Variables

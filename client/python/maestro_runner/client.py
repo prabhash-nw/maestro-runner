@@ -49,15 +49,20 @@ class MaestroClient:
 
     def close(self) -> None:
         """Delete the server session and release resources."""
-        if self._session_id:
-            try:
-                self._session.delete(
-                    f"{self.base_url}/session/{self._session_id}",
-                    timeout=self.timeout,
-                )
-            except requests.RequestException:
-                pass
-            self._session_id = None
+        sid = self._session_id
+        if not sid:
+            return
+
+        # Clear local state first so repeated close() calls don't retry delete.
+        self._session_id = None
+
+        try:
+            self._session.delete(
+                f"{self.base_url}/session/{sid}",
+                timeout=self.timeout,
+            )
+        except requests.RequestException:
+            pass
 
     # --- Session management ---
 
