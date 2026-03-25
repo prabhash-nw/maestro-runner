@@ -49,15 +49,20 @@ class MaestroClient:
 
     def close(self) -> None:
         """Delete the server session and release resources."""
-        if self._session_id:
-            try:
-                self._session.delete(
-                    f"{self.base_url}/session/{self._session_id}",
-                    timeout=self.timeout,
-                )
-            except requests.RequestException:
-                pass
-            self._session_id = None
+        sid = self._session_id
+        if not sid:
+            return
+
+        # Clear local state first so repeated close() calls don't retry delete.
+        self._session_id = None
+
+        try:
+            self._session.delete(
+                f"{self.base_url}/session/{sid}",
+                timeout=self.timeout,
+            )
+        except requests.RequestException:
+            pass
 
     # --- Session management ---
 
@@ -250,31 +255,54 @@ class MaestroClient:
         self,
         *,
         text: str | None = None,
+        text_pattern: str | None = None,
         id: str | None = None,
         selector: ElementSelector | None = None,
         timeout_ms: int | None = None,
         label: str | None = None,
     ) -> ExecutionResult:
         return self._exec(commands.assert_visible(
-            text=text, id=id, selector=selector, timeout_ms=timeout_ms, label=label,
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            selector=selector,
+            timeout_ms=timeout_ms,
+            label=label,
         ))
 
     def assert_not_visible(
         self,
         *,
         text: str | None = None,
+        text_pattern: str | None = None,
         id: str | None = None,
         selector: ElementSelector | None = None,
         timeout_ms: int | None = None,
         label: str | None = None,
     ) -> ExecutionResult:
         return self._exec(commands.assert_not_visible(
-            text=text, id=id, selector=selector, timeout_ms=timeout_ms, label=label,
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            selector=selector,
+            timeout_ms=timeout_ms,
+            label=label,
         ))
 
-    def element_exists(self, *, text: str | None = None, id: str | None = None) -> bool:
+    def element_exists(
+        self,
+        *,
+        text: str | None = None,
+        text_pattern: str | None = None,
+        id: str | None = None,
+    ) -> bool:
         """Check if an element exists without raising. Returns bool."""
-        step = commands.assert_visible(text=text, id=id, optional=True)
+        step = commands.assert_visible(
+            text=text,
+            text_pattern=text_pattern,
+            id=id,
+            optional=True,
+        )
         result = self.execute_step(step)
         return result.success
 

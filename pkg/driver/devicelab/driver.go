@@ -1229,6 +1229,30 @@ func buildSelectorsWithOptions(sel flow.Selector, timeoutMs int, preferClickable
 		})
 	}
 
+	// Explicit regex selector
+	if sel.TextRegex != "" {
+		regexEscaped := escapeUIAutomator(sel.TextRegex)
+		pattern := "(?is)" + regexEscaped
+		if preferClickable {
+			strategies = append(strategies, LocatorStrategy{
+				Strategy: uiautomator2.StrategyUIAutomator,
+				Value:    `new UiSelector().textMatches("` + pattern + `").clickable(true)` + stateFilters,
+			})
+			strategies = append(strategies, LocatorStrategy{
+				Strategy: uiautomator2.StrategyUIAutomator,
+				Value:    `new UiSelector().descriptionMatches("` + pattern + `").clickable(true)` + stateFilters,
+			})
+		}
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().textMatches("` + pattern + `")` + stateFilters,
+		})
+		strategies = append(strategies, LocatorStrategy{
+			Strategy: uiautomator2.StrategyUIAutomator,
+			Value:    `new UiSelector().descriptionMatches("` + pattern + `")` + stateFilters,
+		})
+	}
+
 	// Text-based selector
 	if sel.Text != "" {
 		escaped := escapeUIAutomatorString(sel.Text)

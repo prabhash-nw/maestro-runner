@@ -13,7 +13,7 @@ description: >
 allowed-tools: "Bash(python:*) Bash(python3:*) Bash(pip:*) Bash(pip3:*) Bash(pytest:*) Bash(ruff:*) Bash(mypy:*) Bash(make:*) Bash(adb:*) Bash(curl:*) Bash(source:*)"
 metadata:
   author: maestro-runner
-  version: 1.1.0
+  version: 1.2.0
   category: testing
   tags: [python, pytest, e2e, android, lint, mypy, ruff, test-sequencing, device-lock]
 ---
@@ -36,6 +36,14 @@ Runs tests, lint, and type checks for the Python client at `client/python/`.
   If `python -m pytest` says `No module named pytest`, you're likely using the
   wrong interpreter.
 - For e2e/Android tests: Android emulator running + `maestro-runner` binary built
+
+## Concurrency Policy (Critical)
+
+- Unit tests may run in parallel.
+- Device tests MUST run serially by default.
+- Do NOT use `-n`, `xdist`, background test jobs, or parallel tool calls for any
+  tests that touch a real device/emulator, unless the user explicitly asks for
+  parallel device execution.
 
 ```sh
 # Activate the venv first — all commands below assume it is active
@@ -97,7 +105,7 @@ MAESTRO_DEVICE_ID=emulator-5554 python -m pytest tests/test_e2e_android.py -v
 
 ```sh
 cd client/python && source .venv/bin/activate && \
-  python -m pytest tests/test_add_contact.py tests/test_contact_persists.py -n auto -v
+  python -m pytest tests/test_add_contact.py tests/test_contact_persists.py -v
 ```
 
 ## Step 4: iOS Tests
@@ -168,6 +176,10 @@ cd client/python && ./.venv/bin/python -m pytest tests/test_e2e_android.py -v
 - Integration tests share the server session
 - Device lock is released before e2e tests to prevent "device already in use" errors
 - E2E tests run last with a fresh server connection
+
+**Default behavior rule:**
+- Treat any test that touches a device/emulator as exclusive and run it serially.
+- Only parallelize device tests when the user explicitly requests it.
 
 ## Reports
 

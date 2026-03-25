@@ -37,6 +37,9 @@ let serverLogPath = "";
 let serverLogStream: fs.WriteStream | undefined;
 let runLogPath = "";
 let runLogStream: fs.WriteStream | undefined;
+let shutdownHooksInstalled = false;
+let teardownInFlight: Promise<void> | undefined;
+let shutdownInProgress = false;
 
 function utcTimestamp(): string {
   const date = new Date();
@@ -105,6 +108,75 @@ function tailFile(filePath: string, maxLines = 120): string {
   }
   const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
   return lines.slice(Math.max(0, lines.length - maxLines)).join("\n");
+}
+
+function safeTestName(testName: string): string {
+  return testName.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+async function captureFailureDiagnostics(testName: string, client?: MaestroClient): Promise<string[]> {
+  const timestamp = utcTimestamp();
+  const safeName = safeTestName(testName);
+  const effectiveRunId = runId || `${timestamp}-${WORKER_NAME}-${process.pid}`;
+
+  const diagnosticsDir = path.join(REPORTS_DIR, effectiveRunId, "diagnostics");
+  fs.mkdirSync(diagnosticsDir, { recursive: true });
+
+  const artifactPaths: string[] = [];
+
+  if (serverLogPath && fs.existsSync(serverLogPath)) {
+    const logTail = tailFile(serverLogPath, 200);
+    const logPath = path.join(diagnosticsDir, `${safeName}-${timestamp}-server.log`);
+    fs.writeFileSync(logPath, `${logTail}\n`, "utf-8");
+    artifactPaths.push(logPath);
+  }
+
+  if (!client) {
+    return artifactPaths;
+  }
+
+  try {
+    const screenshotPath = path.join(diagnosticsDir, `${safeName}-${timestamp}-screenshot.png`);
+    const screenshotBuffer = Buffer.from(await client.screenshot());
+    fs.writeFileSync(screenshotPath, screenshotBuffer);
+    artifactPaths.push(screenshotPath);
+  } catch (error) {
+    appendRunLog("WARN", `failed to capture screenshot: ${(error as Error).message}`);
+  }
+
+  try {
+    const uiDumpPath = path.join(diagnosticsDir, `${safeName}-${timestamp}-ui-dump.xml`);
+    const hierarchy = await client.viewHierarchy();
+    fs.writeFileSync(uiDumpPath, hierarchy, "utf-8");
+    artifactPaths.push(uiDumpPath);
+  } catch (error) {
+    appendRunLog("WARN", `failed to capture UI dump: ${(error as Error).message}`);
+  }
+
+  return artifactPaths;
+}
+
+export async function runWithFailureDiagnostics(
+  testName: string,
+  run: () => Promise<void>,
+  client?: MaestroClient,
+): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    const artifacts = await captureFailureDiagnostics(testName, client ?? sharedClient);
+    if (artifacts.length > 0) {
+      appendRunLog(
+        "WARN",
+        `captured failure diagnostics for ${testName}: ${artifacts.map((p) => path.relative(REPORTS_DIR, p)).join(", ")}`,
+      );
+    }
+
+    if (error instanceof Error && artifacts.length > 0) {
+      error.message += `\nDiagnostics:\n${artifacts.map((p) => `- ${p}`).join("\n")}`;
+    }
+    throw error;
+  }
 }
 
 function writeArtifactSummary(status: "passed" | "failed"): void {
@@ -278,6 +350,8 @@ export async function ensureServer(): Promise<string> {
 
 /** Get a shared MaestroClient, creating session on first call. */
 export async function getClient(): Promise<MaestroClient> {
+  installShutdownHooks();
+
   if (sharedClient) return sharedClient;
 
   const url = await ensureServer();
@@ -290,6 +364,61 @@ export async function getClient(): Promise<MaestroClient> {
   appendRunLog("INFO", `client session created for ${SERVER_URL}`);
   sharedClient = client;
   return client;
+}
+
+function installShutdownHooks(): void {
+  if (shutdownHooksInstalled) {
+    return;
+  }
+  shutdownHooksInstalled = true;
+
+  const safeTeardown = async (): Promise<void> => {
+    if (shutdownInProgress) {
+      return;
+    }
+    shutdownInProgress = true;
+
+    if (!teardownInFlight) {
+      teardownInFlight = teardown();
+    }
+
+    try {
+      await teardownInFlight;
+    } catch (error) {
+      appendRunLog("WARN", `teardown during shutdown hook failed: ${(error as Error).message}`);
+    }
+  };
+
+  process.once("SIGINT", () => {
+    void safeTeardown().finally(() => {
+      process.exit(130);
+    });
+  });
+
+  process.once("SIGTERM", () => {
+    void safeTeardown().finally(() => {
+      process.exit(143);
+    });
+  });
+
+  process.once("beforeExit", () => {
+    void safeTeardown();
+  });
+
+  process.once("uncaughtException", (error: Error) => {
+    appendRunLog("WARN", `uncaught exception: ${error.stack ?? error.message}`);
+    void safeTeardown().finally(() => {
+      process.exit(1);
+    });
+  });
+
+  process.once("unhandledRejection", (reason: unknown) => {
+    const msg = reason instanceof Error ? reason.stack ?? reason.message : String(reason);
+    appendRunLog("WARN", `unhandled rejection: ${msg}`);
+    void safeTeardown().finally(() => {
+      process.exit(1);
+    });
+  });
 }
 
 /** Tear down the shared client and server process. */

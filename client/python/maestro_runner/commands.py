@@ -10,6 +10,7 @@ from maestro_runner.models import ElementSelector
 def _selector_value(
     *,
     text: str | None = None,
+    text_pattern: str | None = None,
     id: str | None = None,
     index: int | None = None,
     selector: ElementSelector | None = None,
@@ -24,6 +25,8 @@ def _selector_value(
         d.update(selector.to_dict())
     if text is not None:
         d["text"] = text
+    if text_pattern is not None:
+        d["textRegex"] = text_pattern
     if id is not None:
         d["id"] = id
     if index is not None:
@@ -130,6 +133,7 @@ def swipe(direction: str, *, duration_ms: int = 400, label: str | None = None) -
 def assert_visible(
     *,
     text: str | None = None,
+    text_pattern: str | None = None,
     id: str | None = None,
     selector: ElementSelector | None = None,
     timeout_ms: int | None = None,
@@ -137,7 +141,12 @@ def assert_visible(
     label: str | None = None,
 ) -> dict[str, Any]:
     step: dict[str, Any] = {"type": "assertVisible"}
-    step["selector"] = _selector_value(text=text, id=id, selector=selector)
+    step["selector"] = _selector_value(
+        text=text,
+        text_pattern=text_pattern,
+        id=id,
+        selector=selector,
+    )
     if timeout_ms is not None:
         step["timeout"] = timeout_ms
     if optional:
@@ -150,13 +159,19 @@ def assert_visible(
 def assert_not_visible(
     *,
     text: str | None = None,
+    text_pattern: str | None = None,
     id: str | None = None,
     selector: ElementSelector | None = None,
     timeout_ms: int | None = None,
     label: str | None = None,
 ) -> dict[str, Any]:
     step: dict[str, Any] = {"type": "assertNotVisible"}
-    step["selector"] = _selector_value(text=text, id=id, selector=selector)
+    step["selector"] = _selector_value(
+        text=text,
+        text_pattern=text_pattern,
+        id=id,
+        selector=selector,
+    )
     if timeout_ms is not None:
         step["timeout"] = timeout_ms
     if label is not None:

@@ -62,6 +62,21 @@ class TestSessionManagement:
         client = MaestroClient(BASE)
         client.close()  # should not raise
 
+    def test_close_twice_deletes_once(self, mock):
+        mock.post(f"{BASE}/session", json={"sessionId": SID})
+        mock.delete(f"{BASE}/session/{SID}", status_code=200)
+        client = MaestroClient(BASE, capabilities={"platformName": "android"})
+
+        client.close()
+        client.close()
+
+        delete_calls = [
+            req
+            for req in mock.request_history
+            if req.method == "DELETE" and req.url == f"{BASE}/session/{SID}"
+        ]
+        assert len(delete_calls) == 1
+
     def test_context_manager(self, mock):
         mock.post(f"{BASE}/session", json={"sessionId": SID})
         mock.delete(f"{BASE}/session/{SID}", status_code=200)
@@ -342,6 +357,14 @@ class TestAssertions:
         client.assert_visible(text="Loading", timeout_ms=5000)
         assert mock.last_request.json()["timeout"] == 5000
 
+    def test_assert_visible_with_text_pattern(self, mock):
+        client = _make_client(mock)
+        mock.post(f"{BASE}/session/{SID}/execute", json={"success": True})
+        client.assert_visible(text_pattern=".*Alice.*Tester.*")
+        body = mock.last_request.json()
+        assert body["type"] == "assertVisible"
+        assert body["selector"] == {"textRegex": ".*Alice.*Tester.*"}
+
     def test_assert_not_visible(self, mock):
         client = _make_client(mock)
         mock.post(f"{BASE}/session/{SID}/execute", json={"success": True})
@@ -349,6 +372,14 @@ class TestAssertions:
         body = mock.last_request.json()
         assert body["type"] == "assertNotVisible"
         assert body["selector"] == "Error"
+
+    def test_assert_not_visible_with_text_pattern(self, mock):
+        client = _make_client(mock)
+        mock.post(f"{BASE}/session/{SID}/execute", json={"success": True})
+        client.assert_not_visible(text_pattern=".*Error.*")
+        body = mock.last_request.json()
+        assert body["type"] == "assertNotVisible"
+        assert body["selector"] == {"textRegex": ".*Error.*"}
 
     def test_element_exists_true(self, mock):
         client = _make_client(mock)
@@ -365,6 +396,15 @@ class TestAssertions:
             json={"success": False, "message": "not found"},
         )
         assert client.element_exists(text="Ghost") is False
+
+    def test_element_exists_with_text_pattern(self, mock):
+        client = _make_client(mock)
+        mock.post(
+            f"{BASE}/session/{SID}/execute",
+            json={"success": True},
+        )
+        assert client.element_exists(text_pattern=".*Alice.*") is True
+        assert mock.last_request.json()["selector"] == {"textRegex": ".*Alice.*"}
 
 
 # ── tap_first_match ──────────────────────────────────────────────────────

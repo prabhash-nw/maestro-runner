@@ -16,7 +16,7 @@ description: >
 allowed-tools: "Bash(npm:*) Bash(npx:*) Bash(node:*) Bash(adb:*) Bash(curl:*) Bash(make:*) Bash(pkill:*) Bash(sleep:*)"
 metadata:
   author: maestro-runner
-  version: 1.1.0
+  version: 1.2.0
   category: testing
   tags: [typescript, jest, e2e, android, lint, build, test-sequencing, device-lock]
 ---
@@ -36,6 +36,13 @@ Runs tests, lint, and build for the TypeScript client at `client/typescript/`.
 - **Node.js** ≥ 18 (`node --version`)
 - Dependencies installed: `npm install` inside `client/typescript/`
 - For e2e tests: Android emulator running + `maestro-runner` binary built
+
+## Concurrency Policy (Critical)
+
+- Unit tests may run in parallel.
+- Device tests MUST run serially by default.
+- Do NOT split device test files across parallel jobs or parallel tool calls
+  unless the user explicitly asks for parallel device execution.
 
 ## Step 0: Setup (first time only)
 
@@ -66,6 +73,10 @@ cd client/typescript && \
 - Stale server processes are cleaned up before tests to prevent device lock conflicts
 - `setup.ts` auto-starts a fresh maestro-runner server for the test suite
 - Single-worker execution avoids session/device races on single-emulator setups
+
+**Default behavior rule:**
+- Treat any real-device/emulator test as exclusive and keep execution serial.
+- Only parallelize device tests when the user explicitly requests it.
 
 To run only one group directly:
 ```sh
