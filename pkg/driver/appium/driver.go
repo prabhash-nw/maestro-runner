@@ -90,6 +90,9 @@ func (d *Driver) RestartSession() error {
 	}
 	// Deep-copy stored caps so Connect can mutate them freely
 	caps := deepCopyCaps(d.capabilities)
+	if caps == nil {
+		caps = make(map[string]interface{})
+	}
 	if err := d.client.Connect(caps); err != nil {
 		return fmt.Errorf("failed to create new session: %w", err)
 	}

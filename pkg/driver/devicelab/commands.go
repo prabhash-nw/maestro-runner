@@ -310,8 +310,11 @@ func (d *Driver) assertNotVisible(step *flow.AssertNotVisibleStep) *core.Command
 	}
 
 	// Browser mode: use JS RAF-based polling (60fps in-browser, single CDP call).
+	// assertNotVisibleBrowser returns nil when the page is not connected — fall through to native.
 	if d.isBrowserMode() && d.webView != nil && d.webView.isConnected() {
-		return d.assertNotVisibleBrowser(step.Selector, timeout)
+		if result := d.assertNotVisibleBrowser(step.Selector, timeout); result != nil {
+			return result
+		}
 	}
 
 	deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
@@ -1669,11 +1672,17 @@ func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
 	}
 
 	// Browser mode: use JS RAF-based polling (60fps in-browser, single CDP call).
+	// Browser assert functions return nil when the page is not connected — fall through to native.
 	if d.isBrowserMode() && d.webView != nil && d.webView.isConnected() {
 		if waitingForVisible {
-			return d.assertVisibleBrowser(*selector, timeoutMs)
+			if result := d.assertVisibleBrowser(*selector, timeoutMs); result != nil {
+				return result
+			}
+		} else {
+			if result := d.assertNotVisibleBrowser(*selector, timeoutMs); result != nil {
+				return result
+			}
 		}
-		return d.assertNotVisibleBrowser(*selector, timeoutMs)
 	}
 
 	timeout := time.Duration(timeoutMs) * time.Millisecond

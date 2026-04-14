@@ -165,7 +165,7 @@ func (d *FlutterDriver) Execute(step flow.Step) *core.CommandResult {
 			d.inner.SetFindTimeout(innerGraceTimeout)
 			result = d.inner.Execute(step)
 			d.inner.SetFindTimeout(d.findTimeoutMs)
-			if result.Success {
+			if result != nil && result.Success {
 				return result
 			}
 			// Inner truly can't see it → use Flutter coordinates
