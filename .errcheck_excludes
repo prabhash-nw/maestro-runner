@@ -1,0 +1,5 @@
+# errcheck exclude list
+# fmt.Fprint/fprintf to http.ResponseWriter in tests — errors mean client disconnected, unactionable
+fmt.Fprint
+fmt.Fprintf
+fmt.Fprintln

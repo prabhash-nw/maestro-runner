@@ -151,9 +151,27 @@ upstream changes and verify there is nothing new missing on your branch:
 git log --oneline --no-merges HEAD..upstream/main
 ```
 
-## Run Tests After Merge
+## Run Lint And Tests After Merge
 
-Always run tests after a merge to catch integration regressions early. If upstream added or updated dependencies, refresh them before running tests.
+Always run lint checks immediately after a merge to catch integration and style issues early. Then run tests. If upstream added or updated dependencies, refresh them before running checks.
+
+```sh
+# 0) Lint checks (run immediately after merge)
+make check                # preferred CI-style validation (lint + tests)
+
+# Optional explicit lint-only commands if you want to run linters separately:
+# Go
+go vet ./...
+
+# TypeScript
+cd client/typescript
+npm run lint
+
+# Python
+cd client/python
+./.venv/bin/python -m ruff check .
+./.venv/bin/python -m mypy maestro_runner
+```
 
 ```sh
 # 1) Go server tests (from repo root)
