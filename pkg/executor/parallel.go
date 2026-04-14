@@ -193,9 +193,9 @@ func (pr *ParallelRunner) Run(ctx context.Context, flows []flow.Flow) (*RunResul
 			}
 
 			// Suppress detailed command output during parallel execution
-			workerConfig.OnStepComplete = func(idx int, desc string, passed bool, durationMs int64, errMsg string) {}
-			workerConfig.OnNestedStep = func(depth int, desc string, passed bool, durationMs int64, errMsg string) {}
-			workerConfig.OnNestedFlowStart = func(depth int, desc string) {}
+			workerConfig.OnStepComplete = func(_ int, _ string, _ bool, _ int64, _ string) {}
+			workerConfig.OnNestedStep = func(_ int, _ string, _ bool, _ int64, _ string) {}
+			workerConfig.OnNestedFlowStart = func(_ int, _ string) {}
 
 			// Create runner for this worker with device-specific config
 			runner := &Runner{

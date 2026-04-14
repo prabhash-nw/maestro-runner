@@ -79,7 +79,7 @@ func (d *FlutterDriver) Execute(step flow.Step) *core.CommandResult {
 	// If the app was already determined to be non-Flutter, don't retry.
 	if _, ok := step.(*flow.LaunchAppStep); ok {
 		if d.client != nil {
-			d.client.Close()
+			_ = d.client.Close()
 			d.client = nil
 			d.attempted = false // Was Flutter before — re-discover after restart
 		}
@@ -165,7 +165,7 @@ func (d *FlutterDriver) Execute(step flow.Step) *core.CommandResult {
 			d.inner.SetFindTimeout(innerGraceTimeout)
 			result = d.inner.Execute(step)
 			d.inner.SetFindTimeout(d.findTimeoutMs)
-			if result.Success {
+			if result != nil && result.Success {
 				return result
 			}
 			// Inner truly can't see it → use Flutter coordinates
@@ -541,20 +541,32 @@ func extractSelector(step flow.Step) *flow.Selector {
 
 // --- Pass-through methods ---
 
-func (d *FlutterDriver) Screenshot() ([]byte, error)         { return d.inner.Screenshot() }
-func (d *FlutterDriver) Hierarchy() ([]byte, error)          { return d.inner.Hierarchy() }
-func (d *FlutterDriver) GetState() *core.StateSnapshot       { return d.inner.GetState() }
+// Screenshot captures a screenshot via the inner driver.
+func (d *FlutterDriver) Screenshot() ([]byte, error) { return d.inner.Screenshot() }
+
+// Hierarchy returns the view hierarchy via the inner driver.
+func (d *FlutterDriver) Hierarchy() ([]byte, error) { return d.inner.Hierarchy() }
+
+// GetState returns the latest state snapshot via the inner driver.
+func (d *FlutterDriver) GetState() *core.StateSnapshot { return d.inner.GetState() }
+
+// GetPlatformInfo returns platform metadata via the inner driver.
 func (d *FlutterDriver) GetPlatformInfo() *core.PlatformInfo { return d.inner.GetPlatformInfo() }
+
+// SetFindTimeout propagates the element-find timeout to both the Flutter layer and inner driver.
 func (d *FlutterDriver) SetFindTimeout(ms int) {
 	d.findTimeoutMs = ms
 	d.inner.SetFindTimeout(ms)
 }
+
+// SetWaitForIdleTimeout propagates the idle-wait timeout to the inner driver.
 func (d *FlutterDriver) SetWaitForIdleTimeout(ms int) error {
 	return d.inner.SetWaitForIdleTimeout(ms)
 }
 
 // --- Optional interface forwarding ---
 
+// CDPState returns Chrome DevTools Protocol state if the inner driver supports it.
 func (d *FlutterDriver) CDPState() *core.CDPInfo {
 	if p, ok := d.inner.(core.CDPStateProvider); ok {
 		return p.CDPState()
@@ -562,6 +574,7 @@ func (d *FlutterDriver) CDPState() *core.CDPInfo {
 	return nil
 }
 
+// ForceStop force-stops the given app via the inner driver if supported.
 func (d *FlutterDriver) ForceStop(appID string) error {
 	if m, ok := d.inner.(core.AppLifecycleManager); ok {
 		return m.ForceStop(appID)
@@ -569,6 +582,7 @@ func (d *FlutterDriver) ForceStop(appID string) error {
 	return fmt.Errorf("inner driver does not support ForceStop")
 }
 
+// ClearAppData clears app data for the given app via the inner driver if supported.
 func (d *FlutterDriver) ClearAppData(appID string) error {
 	if m, ok := d.inner.(core.AppLifecycleManager); ok {
 		return m.ClearAppData(appID)
@@ -576,6 +590,7 @@ func (d *FlutterDriver) ClearAppData(appID string) error {
 	return fmt.Errorf("inner driver does not support ClearAppData")
 }
 
+// DetectWebView detects an active WebView via the inner driver if supported.
 func (d *FlutterDriver) DetectWebView() (*core.WebViewInfo, error) {
 	if w, ok := d.inner.(core.WebViewDetector); ok {
 		return w.DetectWebView()

@@ -204,7 +204,7 @@ func (m *Manager) IsStartedByUs(serial string) bool {
 // GetStartedEmulators returns list of all emulators we started
 func (m *Manager) GetStartedEmulators() []string {
 	var serials []string
-	m.started.Range(func(key, value interface{}) bool {
+	m.started.Range(func(key, _ interface{}) bool {
 		serials = append(serials, key.(string))
 		return true
 	})

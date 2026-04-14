@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 const (
@@ -65,7 +65,7 @@ func NewClientTCP(port int) *Client {
 }
 
 func newLogger() *log.Logger {
-	f, err := os.OpenFile("/tmp/devicelab-driver-client.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile("/tmp/devicelab-driver-client.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return log.New(io.Discard, "", 0)
 	}
@@ -74,7 +74,7 @@ func newLogger() *log.Logger {
 
 // SetLogPath sets the log file path.
 func (c *Client) SetLogPath(path string) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
@@ -99,7 +99,7 @@ func (c *Client) ConnectWithTimeout(timeout time.Duration) error {
 	if c.socketPath != "" {
 		httpClient := &http.Client{
 			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 					return net.Dial("unix", c.socketPath)
 				},
 			},

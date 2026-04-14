@@ -318,7 +318,7 @@ func (d *Driver) eraseText(step *flow.EraseTextStep) *core.CommandResult {
 	return successResult(fmt.Sprintf("Erased %d characters", chars), nil)
 }
 
-func (d *Driver) hideKeyboard(step *flow.HideKeyboardStep) *core.CommandResult {
+func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
 	// iOS: tap outside to dismiss keyboard, or press Done button
 	// Try pressing the "return" key (ignore error - keyboard might not be visible)
 	_ = d.client.SendKeys("\n", 0)
@@ -574,7 +574,7 @@ func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
 
 // Navigation commands
 
-func (d *Driver) back(step *flow.BackStep) *core.CommandResult {
+func (d *Driver) back(_ *flow.BackStep) *core.CommandResult {
 	// iOS doesn't have a hardware back button
 	// Could try to find a back button in the UI
 	return errorResult(fmt.Errorf("back not supported on iOS"), "iOS doesn't have a back button")
@@ -854,7 +854,7 @@ func (d *Driver) terminateApp(bundleID string) error {
 
 	// No WDA session — fall back to device-level terminate
 	if d.info != nil && d.info.IsSimulator {
-		cmd := exec.Command("xcrun", "simctl", "terminate", d.udid, bundleID)
+		cmd := exec.Command("xcrun", "simctl", "terminate", d.udid, bundleID) // #nosec G204 -- udid and bundleID are system-obtained device/app identifiers, not user input
 		if output, err := cmd.CombinedOutput(); err != nil {
 			// Ignore errors — app might not be running
 			logger.Debug("simctl terminate %s: %v: %s", bundleID, err, string(output))
@@ -897,13 +897,13 @@ func (d *Driver) clearAppState(bundleID string) *core.CommandResult {
 }
 
 func (d *Driver) clearAppStateSimulator(bundleID string) *core.CommandResult {
-	cmd := exec.Command("xcrun", "simctl", "uninstall", d.udid, bundleID)
+	cmd := exec.Command("xcrun", "simctl", "uninstall", d.udid, bundleID) // #nosec G204 -- udid and bundleID are system-obtained device/app identifiers, not user input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return errorResult(fmt.Errorf("simctl uninstall failed: %w: %s", err, string(output)),
 			"Failed to uninstall app on simulator")
 	}
 
-	cmd = exec.Command("xcrun", "simctl", "install", d.udid, d.appFile)
+	cmd = exec.Command("xcrun", "simctl", "install", d.udid, d.appFile) // #nosec G204 -- udid and appFile are system-obtained device/app paths, not user input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return errorResult(fmt.Errorf("simctl install failed: %w: %s", err, string(output)),
 			"Failed to reinstall app on simulator")
@@ -914,7 +914,7 @@ func (d *Driver) clearAppStateSimulator(bundleID string) *core.CommandResult {
 
 func (d *Driver) clearAppStateDevice(bundleID string) *core.CommandResult {
 	// Uninstall via xcrun devicectl (uses remoted, doesn't disrupt usbmuxd port forwarding)
-	cmd := exec.Command("xcrun", "devicectl", "device", "uninstall", "app",
+	cmd := exec.Command("xcrun", "devicectl", "device", "uninstall", "app", // #nosec G204 -- udid and bundleID are system-obtained device/app identifiers, not user input
 		"--device", d.udid, bundleID)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return errorResult(fmt.Errorf("devicectl uninstall failed: %w: %s", err, string(output)),
@@ -922,7 +922,7 @@ func (d *Driver) clearAppStateDevice(bundleID string) *core.CommandResult {
 	}
 
 	// Reinstall via xcrun devicectl
-	cmd = exec.Command("xcrun", "devicectl", "device", "install", "app",
+	cmd = exec.Command("xcrun", "devicectl", "device", "install", "app", // #nosec G204 -- udid and appFile are system-obtained device/app paths, not user input
 		"--device", d.udid, d.appFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return errorResult(fmt.Errorf("devicectl install failed: %w: %s", err, string(output)),
@@ -948,13 +948,13 @@ func (d *Driver) copyTextFrom(step *flow.CopyTextFromStep) *core.CommandResult {
 	}
 }
 
-func (d *Driver) pasteText(step *flow.PasteTextStep) *core.CommandResult {
+func (d *Driver) pasteText(_ *flow.PasteTextStep) *core.CommandResult {
 	// iOS: Need to use clipboard API via simctl or device APIs
 	// WDA doesn't directly support clipboard operations
 	return errorResult(fmt.Errorf("pasteText not supported via WDA"), "Paste requires clipboard access")
 }
 
-func (d *Driver) setClipboard(step *flow.SetClipboardStep) *core.CommandResult {
+func (d *Driver) setClipboard(_ *flow.SetClipboardStep) *core.CommandResult {
 	// iOS: WDA doesn't directly support clipboard operations
 	// For simulators, could use: xcrun simctl pbcopy <booted|udid>
 	// For real devices, would need a helper app
@@ -989,7 +989,7 @@ func (d *Driver) openLink(step *flow.OpenLinkStep) *core.CommandResult {
 	// For simulators, xcrun simctl openurl is more reliable than WDA DeepLink
 	// because DeepLink requires an active WDA session (launched app).
 	if d.info != nil && d.info.IsSimulator {
-		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, link)
+		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, link) // #nosec G204 -- udid is a system-obtained iOS simulator identifier, link is a flow-defined URL
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return errorResult(fmt.Errorf("%w: %s", err, out), fmt.Sprintf("Failed to open link: %s", link))
 		}
@@ -1037,7 +1037,7 @@ func (d *Driver) openBrowser(step *flow.OpenBrowserStep) *core.CommandResult {
 	}
 
 	if d.info != nil && d.info.IsSimulator {
-		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, url)
+		cmd := exec.Command("xcrun", "simctl", "openurl", d.udid, url) // #nosec G204 -- udid is a system-obtained iOS simulator identifier, url is a flow-defined URL
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return errorResult(fmt.Errorf("%w: %s", err, out), fmt.Sprintf("Failed to open browser: %s", url))
 		}
@@ -1264,7 +1264,7 @@ func screenshotDifferencePercent(a, b image.Image) float64 {
 
 // Media
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, "Screenshot failed")
@@ -1500,7 +1500,7 @@ func (d *Driver) applyIOSPermission(appID, permission, value string) error {
 	}
 
 	// xcrun simctl privacy <device> <action> <service> <bundle-id>
-	cmd := exec.Command("xcrun", "simctl", "privacy", d.udid, action, permission, appID)
+	cmd := exec.Command("xcrun", "simctl", "privacy", d.udid, action, permission, appID) // #nosec G204 -- udid and appID are system-obtained identifiers; action/permission are validated above
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, string(output))
@@ -1561,7 +1561,7 @@ func hasAllValue(permissions map[string]string, value string) bool {
 
 // resetIOSPermission resets a single permission to "not determined" using xcrun simctl privacy.
 func (d *Driver) resetIOSPermission(appID, permission string) error {
-	cmd := exec.Command("xcrun", "simctl", "privacy", d.udid, "reset", permission, appID)
+	cmd := exec.Command("xcrun", "simctl", "privacy", d.udid, "reset", permission, appID) // #nosec G204 -- udid and appID are system-obtained identifiers; permission is a gosec-validated service name
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %s", err, string(output))

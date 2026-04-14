@@ -94,6 +94,7 @@ type testProvider struct {
 func (t *testProvider) Name() string { return t.name }
 func (t *testProvider) ExtractMeta(sessionID string, caps map[string]interface{}, meta map[string]string) {
 }
+
 func (t *testProvider) ReportResult(appiumURL string, meta map[string]string, result *TestResult) error {
 	return nil
 }

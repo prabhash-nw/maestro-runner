@@ -35,8 +35,10 @@ import (
 
 // activeCleanup holds the current driver cleanup function so the signal handler
 // can clean up resources (sockets, adb forwards, sessions) before os.Exit.
-var activeCleanup func()
-var cleanupMu sync.Mutex
+var (
+	activeCleanup func()
+	cleanupMu     sync.Mutex
+)
 
 var testCommand = &cli.Command{
 	Name:      "test",
@@ -691,7 +693,7 @@ func resolveOutputDir(output string, flatten bool) (string, error) {
 
 func executeTest(cfg *RunConfig) error {
 	// 1. Create output directory
-	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.OutputDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -1388,7 +1390,7 @@ func onFlowStart(flowIdx, totalFlows int, name, file string) {
 	fmt.Println(strings.Repeat("─", 60))
 }
 
-func onStepComplete(idx int, desc string, passed bool, durationMs int64, errMsg string) {
+func onStepComplete(_ int, desc string, passed bool, durationMs int64, errMsg string) {
 	// Don't mark runFlow/repeat/retry as slow - they contain multiple steps
 	isCompoundStep := strings.HasPrefix(desc, "runFlow:") ||
 		strings.HasPrefix(desc, "repeat:") ||
@@ -1446,7 +1448,7 @@ func onNestedStep(depth int, desc string, passed bool, durationMs int64, errMsg 
 	}
 }
 
-func onFlowEnd(name string, passed bool, durationMs int64, errMsg string) {
+func onFlowEnd(name string, passed bool, durationMs int64, _ string) {
 	if passed {
 		fmt.Printf("%s✓ %s%s %s%s%s\n",
 			color(colorGreen), color(colorReset), name, color(colorGray), formatDuration(durationMs), color(colorReset))
@@ -1806,7 +1808,7 @@ func createAppiumDriver(cfg *RunConfig) (core.Driver, func(), error) {
 
 // runCommand runs a command and returns stdout.
 func runCommand(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- name and args are internal CLI helper invocations with system-resolved tool names, not user-controlled shell input
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -1847,7 +1849,7 @@ func checkDeviceAvailable(deviceID, platform string) error {
 		}
 
 		// Also verify device is connected via adb
-		cmd := exec.Command("adb", "-s", deviceID, "get-state")
+		cmd := exec.Command("adb", "-s", deviceID, "get-state") // #nosec G204 -- deviceID is a system-obtained ADB device serial, not user input
 		output, err := cmd.Output()
 		if err != nil {
 			return fmt.Errorf("device not found or not connected")
@@ -1861,7 +1863,7 @@ func checkDeviceAvailable(deviceID, platform string) error {
 
 // enhanceNoDevicesError enhances error suggestions with actual command context.
 // Emulator flags are global flags, so they must appear before the "test" subcommand.
-func enhanceNoDevicesError(noDevErr *device.NoDevicesError, cfg *RunConfig) {
+func enhanceNoDevicesError(noDevErr *device.NoDevicesError, _ *RunConfig) {
 	// Split os.Args into: binary + global flags vs "test" subcommand + its args.
 	// Example: maestro-runner --platform android test flow.yaml
 	//   → globalPart = "maestro-runner --platform android"

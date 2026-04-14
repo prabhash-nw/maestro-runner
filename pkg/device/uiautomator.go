@@ -126,7 +126,7 @@ func (d *AndroidDevice) setupSocketForward(cfg UIAutomator2Config) error {
 	d.socketPath = socketPath
 
 	// Write PID file so other instances can detect us as the owner
-	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		logger.Warn("failed to write PID file: %v", err)
 	}
 
@@ -254,7 +254,7 @@ func (d *AndroidDevice) checkHealth() bool {
 func checkHealthViaSocket(socketPath string) bool {
 	client := &http.Client{
 		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", socketPath)
 			},
 		},

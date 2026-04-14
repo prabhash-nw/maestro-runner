@@ -22,12 +22,12 @@ func (m *mockDriver) Execute(step flow.Step) *core.CommandResult {
 	return core.SuccessResult("ok", nil)
 }
 
-func (m *mockDriver) Screenshot() ([]byte, error)           { return nil, nil }
-func (m *mockDriver) Hierarchy() ([]byte, error)             { return nil, nil }
-func (m *mockDriver) GetState() *core.StateSnapshot          { return &core.StateSnapshot{} }
-func (m *mockDriver) GetPlatformInfo() *core.PlatformInfo    { return &core.PlatformInfo{} }
-func (m *mockDriver) SetFindTimeout(ms int)                  {}
-func (m *mockDriver) SetWaitForIdleTimeout(ms int) error     { return nil }
+func (m *mockDriver) Screenshot() ([]byte, error)         { return nil, nil }
+func (m *mockDriver) Hierarchy() ([]byte, error)          { return nil, nil }
+func (m *mockDriver) GetState() *core.StateSnapshot       { return &core.StateSnapshot{} }
+func (m *mockDriver) GetPlatformInfo() *core.PlatformInfo { return &core.PlatformInfo{} }
+func (m *mockDriver) SetFindTimeout(ms int)               {}
+func (m *mockDriver) SetWaitForIdleTimeout(ms int) error  { return nil }
 
 func TestFlutterDriver_PassThrough_Success(t *testing.T) {
 	inner := &mockDriver{

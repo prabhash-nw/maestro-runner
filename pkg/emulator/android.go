@@ -1,3 +1,4 @@
+// Package emulator manages Android emulator lifecycle via the emulator binary.
 package emulator
 
 import (
@@ -86,7 +87,7 @@ func ListAVDs() ([]AVDInfo, error) {
 	}
 
 	// Run emulator -list-avds
-	cmd := exec.Command(emulatorPath, "-list-avds")
+	cmd := exec.Command(emulatorPath, "-list-avds") // #nosec G204 -- emulatorPath is resolved from Android SDK, not user input
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list AVDs: %w", err)
@@ -125,7 +126,7 @@ func RunningAVDNames() map[string]bool {
 		parts := strings.Fields(line)
 		if len(parts) >= 2 && parts[1] == "device" && strings.HasPrefix(parts[0], "emulator-") {
 			serial := parts[0]
-			nameCmd := exec.Command("adb", "-s", serial, "shell", "getprop", "ro.boot.qemu.avd_name")
+			nameCmd := exec.Command("adb", "-s", serial, "shell", "getprop", "ro.boot.qemu.avd_name") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 			nameOut, err := nameCmd.Output()
 			if err == nil {
 				name := strings.TrimSpace(string(nameOut))
@@ -170,7 +171,7 @@ func CheckBootStatus(serial string) (*BootStatus, error) {
 	status := &BootStatus{}
 
 	// Stage 1: Check device state
-	stateCmd := exec.Command("adb", "-s", serial, "get-state")
+	stateCmd := exec.Command("adb", "-s", serial, "get-state") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 	stateOut, err := stateCmd.Output()
 	status.StateReady = (err == nil && strings.TrimSpace(string(stateOut)) == "device")
 
@@ -179,18 +180,18 @@ func CheckBootStatus(serial string) (*BootStatus, error) {
 	}
 
 	// Stage 2: Check boot completed property
-	bootCmd := exec.Command("adb", "-s", serial, "shell", "getprop", "sys.boot_completed")
+	bootCmd := exec.Command("adb", "-s", serial, "shell", "getprop", "sys.boot_completed") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 	bootOut, err := bootCmd.Output()
 	status.BootCompleted = (err == nil && strings.TrimSpace(string(bootOut)) == "1")
 
 	// Stage 3: Check service readiness
 	// Check settings service
-	settingsCmd := exec.Command("adb", "-s", serial, "shell", "settings", "list", "global")
+	settingsCmd := exec.Command("adb", "-s", serial, "shell", "settings", "list", "global") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 	_, err = settingsCmd.Output()
 	status.SettingsReady = (err == nil)
 
 	// Check package manager
-	pmCmd := exec.Command("adb", "-s", serial, "shell", "pm", "get-max-users")
+	pmCmd := exec.Command("adb", "-s", serial, "shell", "pm", "get-max-users") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 	_, err = pmCmd.Output()
 	status.PackageManager = (err == nil)
 
@@ -239,7 +240,7 @@ func WaitForDeviceState(serial string, timeout time.Duration) error {
 	defer ticker.Stop()
 
 	for time.Now().Before(deadline) {
-		cmd := exec.Command("adb", "-s", serial, "get-state")
+		cmd := exec.Command("adb", "-s", serial, "get-state") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 		output, err := cmd.Output()
 		if err == nil && strings.TrimSpace(string(output)) == "device" {
 			logger.Info("Device state ready: %s", serial)
@@ -266,7 +267,7 @@ func StartEmulator(avdName string, consolePort int, timeout time.Duration) (stri
 	serial := fmt.Sprintf("emulator-%d", consolePort)
 
 	// Start emulator process (devicelab flags + Maestro optimizations)
-	cmd := exec.Command(emulatorPath,
+	cmd := exec.Command(emulatorPath, // #nosec G204 -- emulatorPath is resolved from Android SDK, avdName is a system-obtained AVD name, not user input
 		"-avd", avdName,
 		"-port", fmt.Sprintf("%d", consolePort),
 		"-netdelay", "none",
@@ -338,7 +339,7 @@ func ShutdownEmulator(serial string, timeout time.Duration) error {
 	logger.Info("Shutting down emulator: %s", serial)
 
 	// Step 1: Try adb emu kill
-	cmd := exec.Command("adb", "-s", serial, "emu", "kill")
+	cmd := exec.Command("adb", "-s", serial, "emu", "kill") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 	if err := cmd.Run(); err != nil {
 		logger.Warn("adb emu kill failed for %s: %v", serial, err)
 	}
@@ -350,7 +351,7 @@ func ShutdownEmulator(serial string, timeout time.Duration) error {
 
 	for time.Now().Before(deadline) {
 		// Check if device is gone
-		checkCmd := exec.Command("adb", "-s", serial, "get-state")
+		checkCmd := exec.Command("adb", "-s", serial, "get-state") // #nosec G204 -- serial is a system-obtained ADB device serial, not user input
 		if _, err := checkCmd.Output(); err != nil {
 			logger.Info("Emulator shutdown confirmed: %s", serial)
 			return nil
@@ -378,11 +379,11 @@ func forceKillEmulator(serial string) error {
 	}
 
 	// Find emulator process by port
-	cmd := exec.Command("pgrep", "-f", fmt.Sprintf("emulator.*-port %d", port))
+	cmd := exec.Command("pgrep", "-f", fmt.Sprintf("emulator.*-port %d", port)) // #nosec G204 -- port is an integer derived from the system-assigned emulator serial, not user input
 	output, err := cmd.Output()
 	if err != nil {
 		// Try alternative search
-		cmd = exec.Command("pgrep", "-f", "qemu-system.*-avd")
+		cmd = exec.Command("pgrep", "-f", "qemu-system.*-avd") // #nosec G204 -- pgrep with fixed pattern, no variable args
 		output, err = cmd.Output()
 		if err != nil {
 			return fmt.Errorf("could not find emulator process")
@@ -397,11 +398,11 @@ func forceKillEmulator(serial string) error {
 	// Kill all found processes
 	for _, pid := range pids {
 		// Try SIGTERM first
-		killCmd := exec.Command("kill", "-TERM", pid)
+		killCmd := exec.Command("kill", "-TERM", pid) // #nosec G204 -- pid is a system-obtained process ID from pgrep output, not user input
 		if err := killCmd.Run(); err != nil {
 			// If TERM fails, use SIGKILL
 			logger.Warn("SIGTERM failed for PID %s, using SIGKILL", pid)
-			killCmd = exec.Command("kill", "-KILL", pid)
+			killCmd = exec.Command("kill", "-KILL", pid) // #nosec G204 -- pid is a system-obtained process ID from pgrep output, not user input
 			if err := killCmd.Run(); err != nil {
 				logger.Error("SIGKILL failed for PID %s: %v", pid, err)
 			}

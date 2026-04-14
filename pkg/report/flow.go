@@ -147,7 +147,7 @@ func (w *FlowWriter) SaveScreenshot(cmdIndex int, timing string, data []byte) (s
 	filename := fmt.Sprintf("cmd-%03d-%s.png", cmdIndex, timing)
 	absPath := filepath.Join(w.assetsDir, filename)
 
-	if err := os.WriteFile(absPath, data, 0o644); err != nil {
+	if err := os.WriteFile(absPath, data, 0o600); err != nil {
 		return "", err
 	}
 
@@ -168,7 +168,7 @@ func (w *FlowWriter) SaveNamedScreenshot(cmdIndex int, name string, data []byte)
 	}
 	absPath := filepath.Join(w.assetsDir, filename)
 
-	if err := os.WriteFile(absPath, data, 0o644); err != nil {
+	if err := os.WriteFile(absPath, data, 0o600); err != nil {
 		return "", err
 	}
 
@@ -180,7 +180,7 @@ func (w *FlowWriter) SaveViewHierarchy(cmdIndex int, data []byte) (string, error
 	filename := fmt.Sprintf("cmd-%03d-hierarchy.xml", cmdIndex)
 	absPath := filepath.Join(w.assetsDir, filename)
 
-	if err := os.WriteFile(absPath, data, 0o644); err != nil {
+	if err := os.WriteFile(absPath, data, 0o600); err != nil {
 		return "", err
 	}
 
@@ -192,7 +192,7 @@ func (w *FlowWriter) SaveDeviceLog(data []byte) (string, error) {
 	filename := "device.log"
 	absPath := filepath.Join(w.assetsDir, filename)
 
-	if err := os.WriteFile(absPath, data, 0o644); err != nil {
+	if err := os.WriteFile(absPath, data, 0o600); err != nil {
 		return "", err
 	}
 

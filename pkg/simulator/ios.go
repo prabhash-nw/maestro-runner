@@ -1,3 +1,4 @@
+// Package simulator manages iOS simulator lifecycle via xcrun simctl.
 package simulator
 
 import (
@@ -176,7 +177,7 @@ func WaitForBoot(udid string, timeout time.Duration) error {
 func BootSimulator(udid string, timeout time.Duration) error {
 	logger.Info("Booting simulator: %s", udid)
 
-	cmd := exec.Command("xcrun", "simctl", "boot", udid)
+	cmd := exec.Command("xcrun", "simctl", "boot", udid) // #nosec G204 -- udid is a system-obtained iOS simulator identifier, not user input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Check if already booted
 		if strings.Contains(string(output), "current state: Booted") {
@@ -204,7 +205,7 @@ func BootSimulator(udid string, timeout time.Duration) error {
 func ShutdownSimulator(udid string, timeout time.Duration) error {
 	logger.Info("Shutting down simulator: %s", udid)
 
-	cmd := exec.Command("xcrun", "simctl", "shutdown", udid)
+	cmd := exec.Command("xcrun", "simctl", "shutdown", udid) // #nosec G204 -- udid is a system-obtained iOS simulator identifier, not user input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		// Check if already shutdown
 		if strings.Contains(string(output), "current state: Shutdown") {
@@ -237,9 +238,9 @@ type simctlRuntimesOutput struct {
 }
 
 type simctlRuntime struct {
-	Identifier          string                   `json:"identifier"`
-	Version             string                   `json:"version"`
-	IsAvailable         bool                     `json:"isAvailable"`
+	Identifier           string                  `json:"identifier"`
+	Version              string                  `json:"version"`
+	IsAvailable          bool                    `json:"isAvailable"`
 	SupportedDeviceTypes []simctlDeviceTypeEntry `json:"supportedDeviceTypes"`
 }
 
@@ -313,7 +314,7 @@ func CreateSimulator(name, deviceTypeID, runtimeID string) (string, error) {
 		return "", err
 	}
 
-	cmd := exec.Command("xcrun", "simctl", "create", name, deviceTypeID, runtimeID)
+	cmd := exec.Command("xcrun", "simctl", "create", name, deviceTypeID, runtimeID) // #nosec G204 -- args are system-obtained simulator device type and runtime identifiers, not user input
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to create simulator: %w", err)
@@ -334,7 +335,7 @@ func DeleteSimulator(udid string) error {
 		return err
 	}
 
-	cmd := exec.Command("xcrun", "simctl", "delete", udid)
+	cmd := exec.Command("xcrun", "simctl", "delete", udid) // #nosec G204 -- udid is a system-obtained iOS simulator identifier, not user input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to delete simulator %s: %s", udid, strings.TrimSpace(string(output)))
 	}

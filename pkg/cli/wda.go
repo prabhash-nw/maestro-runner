@@ -31,7 +31,7 @@ Examples:
 		{
 			Name:  "version",
 			Usage: "Show current WebDriverAgent version",
-			Action: func(c *cli.Context) error {
+			Action: func(_ *cli.Context) error {
 				version, err := wdadriver.GetLocalWDAVersion()
 				if err != nil {
 					if !wdadriver.IsWDAInstalled() {

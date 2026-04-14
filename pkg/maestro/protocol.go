@@ -48,16 +48,16 @@ type rawMessage struct {
 // ElementResult is the result returned by UI.findElement.
 // It bundles element ID with commonly needed attributes to avoid extra round-trips.
 type ElementResult struct {
-	ElementID   string      `json:"elementId"`
-	Text        string      `json:"text"`
-	ContentDesc string      `json:"contentDesc"`
-	ClassName   string      `json:"className"`
-	ResourceID  string      `json:"resourceId"`
+	ElementID   string       `json:"elementId"`
+	Text        string       `json:"text"`
+	ContentDesc string       `json:"contentDesc"`
+	ClassName   string       `json:"className"`
+	ResourceID  string       `json:"resourceId"`
 	Bounds      BoundsResult `json:"bounds"`
-	Displayed   bool        `json:"displayed"`
-	Enabled     bool        `json:"enabled"`
-	Clickable   bool        `json:"clickable"`
-	Selected    bool        `json:"selected"`
+	Displayed   bool         `json:"displayed"`
+	Enabled     bool         `json:"enabled"`
+	Clickable   bool         `json:"clickable"`
+	Selected    bool         `json:"selected"`
 }
 
 // BoundsResult represents element bounds.
@@ -70,7 +70,7 @@ type BoundsResult struct {
 
 // SessionResult is returned by Session.create.
 type SessionResult struct {
-	SessionID  string     `json:"sessionId"`
+	SessionID  string       `json:"sessionId"`
 	DeviceInfo DeviceResult `json:"deviceInfo"`
 }
 
@@ -87,7 +87,7 @@ type DeviceResult struct {
 
 // KeyboardInfo is returned by Device.getKeyboardInfo and pushed via Input.keyboardStateChanged.
 type KeyboardInfo struct {
-	Visible bool         `json:"visible"`
+	Visible bool          `json:"visible"`
 	Bounds  *BoundsResult `json:"bounds,omitempty"`
 }
 

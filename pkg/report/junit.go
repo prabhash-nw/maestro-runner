@@ -19,7 +19,7 @@ func GenerateJUnit(reportDir string) error {
 	xml := buildJUnitXML(index, flows)
 
 	outputPath := filepath.Join(reportDir, "junit-report.xml")
-	if err := os.WriteFile(outputPath, []byte(xml), 0o644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(xml), 0o600); err != nil {
 		return fmt.Errorf("write junit xml: %w", err)
 	}
 
@@ -143,7 +143,7 @@ func resolveDevice(entry *FlowEntry, index *Index) *Device {
 
 // resolveFailure determines the failure type and body from the flow detail.
 // It finds the first failed command and maps its type to a failure category.
-func resolveFailure(entry *FlowEntry, detail *FlowDetail) (failureType, body string) {
+func resolveFailure(_ *FlowEntry, detail *FlowDetail) (failureType, body string) {
 	if detail == nil {
 		return "TestError", ""
 	}

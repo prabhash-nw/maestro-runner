@@ -40,7 +40,7 @@ func TestNewSauceLabs_RejectsNonSauce(t *testing.T) {
 func TestExtractMeta_RealDevice(t *testing.T) {
 	p := &sauceLabs{}
 	caps := map[string]interface{}{
-		"appium:jobUuid":  "abc-123",
+		"appium:jobUuid":    "abc-123",
 		"appium:deviceName": "Samsung Galaxy S21",
 	}
 	meta := make(map[string]string)
@@ -122,10 +122,14 @@ func TestCredentialsFromAppiumURL_FromURL(t *testing.T) {
 }
 
 func TestCredentialsFromAppiumURL_FromEnv(t *testing.T) {
-	os.Setenv("SAUCE_USERNAME", "envuser")
-	os.Setenv("SAUCE_ACCESS_KEY", "envkey")
-	defer os.Unsetenv("SAUCE_USERNAME")
-	defer os.Unsetenv("SAUCE_ACCESS_KEY")
+	if err := os.Setenv("SAUCE_USERNAME", "envuser"); err != nil {
+		t.Fatalf("setenv SAUCE_USERNAME: %v", err)
+	}
+	if err := os.Setenv("SAUCE_ACCESS_KEY", "envkey"); err != nil {
+		t.Fatalf("setenv SAUCE_ACCESS_KEY: %v", err)
+	}
+	defer func() { _ = os.Unsetenv("SAUCE_USERNAME") }()
+	defer func() { _ = os.Unsetenv("SAUCE_ACCESS_KEY") }()
 
 	u, k, err := credentialsFromAppiumURL("https://ondemand.saucelabs.com/wd/hub")
 	if err != nil {
@@ -137,8 +141,8 @@ func TestCredentialsFromAppiumURL_FromEnv(t *testing.T) {
 }
 
 func TestCredentialsFromAppiumURL_Missing(t *testing.T) {
-	os.Unsetenv("SAUCE_USERNAME")
-	os.Unsetenv("SAUCE_ACCESS_KEY")
+	_ = os.Unsetenv("SAUCE_USERNAME")
+	_ = os.Unsetenv("SAUCE_ACCESS_KEY")
 
 	_, _, err := credentialsFromAppiumURL("https://ondemand.saucelabs.com/wd/hub")
 	if err == nil {
@@ -200,7 +204,9 @@ func TestReportResult_RDC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &gotBody)
+		if err := json.Unmarshal(body, &gotBody); err != nil {
+			t.Logf("unmarshal body: %v", err)
+		}
 		w.WriteHeader(200)
 	}))
 	defer srv.Close()
@@ -234,7 +240,9 @@ func TestReportResult_VMs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &gotBody)
+		if err := json.Unmarshal(body, &gotBody); err != nil {
+			t.Logf("unmarshal body: %v", err)
+		}
 		w.WriteHeader(200)
 	}))
 	defer srv.Close()
@@ -263,7 +271,9 @@ func TestReportResult_EmptyJobID(t *testing.T) {
 func TestUpdateJob_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-		w.Write([]byte("internal error"))
+		if _, err := w.Write([]byte("internal error")); err != nil {
+			t.Logf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

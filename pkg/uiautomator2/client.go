@@ -27,7 +27,7 @@ type Client struct {
 // NewClient creates a client using Unix socket (Linux/Mac).
 func NewClient(socketPath string) *Client {
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 			return net.Dial("unix", socketPath)
 		},
 	}
@@ -61,7 +61,7 @@ func createLogger() *log.Logger {
 
 // createLoggerWithPath creates a logger that writes to the specified path
 func createLoggerWithPath(path string) *log.Logger {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return log.New(io.Discard, "", 0)
 	}

@@ -274,7 +274,7 @@ func (d *Driver) eraseText(step *flow.EraseTextStep) *core.CommandResult {
 }
 
 // hideKeyboard is a no-op on web (no virtual keyboard).
-func (d *Driver) hideKeyboard(step *flow.HideKeyboardStep) *core.CommandResult {
+func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
 	return successResult("hideKeyboard is a no-op on web platform", nil)
 }
 
@@ -438,7 +438,7 @@ func (d *Driver) waitForPageReady() {
 }
 
 // back navigates back in browser history.
-func (d *Driver) back(step *flow.BackStep) *core.CommandResult {
+func (d *Driver) back(_ *flow.BackStep) *core.CommandResult {
 	if err := d.page.NavigateBack(); err != nil {
 		return errorResult(err, "Failed to navigate back")
 	}
@@ -480,12 +480,12 @@ func (d *Driver) launchApp(step *flow.LaunchAppStep) *core.CommandResult {
 }
 
 // stopApp navigates to about:blank.
-func (d *Driver) stopApp(step *flow.StopAppStep) *core.CommandResult {
+func (d *Driver) stopApp(_ *flow.StopAppStep) *core.CommandResult {
 	return d.navigateBlank()
 }
 
 // killApp navigates to about:blank.
-func (d *Driver) killApp(step *flow.KillAppStep) *core.CommandResult {
+func (d *Driver) killApp(_ *flow.KillAppStep) *core.CommandResult {
 	return d.navigateBlank()
 }
 
@@ -498,7 +498,7 @@ func (d *Driver) navigateBlank() *core.CommandResult {
 }
 
 // clearState clears cookies, storage, and cache.
-func (d *Driver) clearState(step *flow.ClearStateStep) *core.CommandResult {
+func (d *Driver) clearState(_ *flow.ClearStateStep) *core.CommandResult {
 	d.clearAllState()
 	return successResult("Cleared browser state", nil)
 }
@@ -539,7 +539,7 @@ func (d *Driver) copyTextFrom(step *flow.CopyTextFromStep) *core.CommandResult {
 }
 
 // pasteText pastes clipboard text into the focused element.
-func (d *Driver) pasteText(step *flow.PasteTextStep) *core.CommandResult {
+func (d *Driver) pasteText(_ *flow.PasteTextStep) *core.CommandResult {
 	if d.clipboard == "" {
 		return errorResult(fmt.Errorf("clipboard is empty"), "Clipboard is empty")
 	}
@@ -729,7 +729,7 @@ func (d *Driver) waitUntilNotVisible(sel flow.Selector, timeoutMs int) *core.Com
 }
 
 // waitForAnimationToEnd waits for the DOM to stabilize.
-func (d *Driver) waitForAnimationToEnd(step *flow.WaitForAnimationToEndStep) *core.CommandResult {
+func (d *Driver) waitForAnimationToEnd(_ *flow.WaitForAnimationToEndStep) *core.CommandResult {
 	p := d.page.Timeout(10 * time.Second)
 	if err := p.WaitDOMStable(300*time.Millisecond, 0); err != nil {
 		return errorResult(err, "DOM did not stabilize")
@@ -738,7 +738,7 @@ func (d *Driver) waitForAnimationToEnd(step *flow.WaitForAnimationToEndStep) *co
 }
 
 // takeScreenshot captures a full-page screenshot.
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.page.Screenshot(true, nil)
 	if err != nil {
 		return errorResult(err, "Failed to take screenshot")
@@ -750,12 +750,12 @@ func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResu
 }
 
 // acceptAlert accepts the currently showing dialog.
-func (d *Driver) acceptAlert(step *flow.AcceptAlertStep) *core.CommandResult {
+func (d *Driver) acceptAlert(_ *flow.AcceptAlertStep) *core.CommandResult {
 	return d.handleDialog(true)
 }
 
 // dismissAlert dismisses the currently showing dialog.
-func (d *Driver) dismissAlert(step *flow.DismissAlertStep) *core.CommandResult {
+func (d *Driver) dismissAlert(_ *flow.DismissAlertStep) *core.CommandResult {
 	return d.handleDialog(false)
 }
 
@@ -860,9 +860,9 @@ func convertToKeys(text string) []input.Key {
 
 const alphanumeric = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-// cryptoRandIntn returns a cryptographically secure random int in [0, max).
-func cryptoRandIntn(max int) int {
-	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+// cryptoRandIntn returns a cryptographically secure random int in [0, maxVal).
+func cryptoRandIntn(maxVal int) int {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(maxVal)))
 	if err != nil {
 		log.Printf("[browser] crypto/rand failed, using fallback: %v", err)
 		return 0
@@ -1029,7 +1029,7 @@ func (d *Driver) setCookies(step *flow.SetCookiesStep) *core.CommandResult {
 }
 
 // getCookies retrieves all browser cookies and returns them as JSON.
-func (d *Driver) getCookies(step *flow.GetCookiesStep) *core.CommandResult {
+func (d *Driver) getCookies(_ *flow.GetCookiesStep) *core.CommandResult {
 	res, err := proto.NetworkGetCookies{}.Call(d.page)
 	if err != nil {
 		return errorResult(fmt.Errorf("getCookies: %w", err), "")
@@ -1676,8 +1676,10 @@ func (d *Driver) clearNetworkMocks() *core.CommandResult {
 	return successResult("Cleared all network mocks and conditions", nil)
 }
 
-var firstNames = []string{"Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry"}
-var lastNames = []string{"Smith", "Johnson", "Brown", "Taylor", "Wilson", "Davis", "Clark", "Lewis"}
+var (
+	firstNames = []string{"Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry"}
+	lastNames  = []string{"Smith", "Johnson", "Brown", "Taylor", "Wilson", "Davis", "Clark", "Lewis"}
+)
 
 func randomPersonName() string {
 	return firstNames[cryptoRandIntn(len(firstNames))] + " " + lastNames[cryptoRandIntn(len(lastNames))]

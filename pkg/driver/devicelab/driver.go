@@ -89,10 +89,10 @@ type Driver struct {
 	cdpStateFunc func() *core.CDPInfo
 
 	// WebView CDP connection manager (nil = not wired)
-	webView        *webViewManager
-	lastCDPScan    time.Time     // rate-limit ADB shell CDP scans
-	lastCDPResult  *core.CDPInfo // cached result from last scan
-	knownCDPType   string        // "browser" or "webview" — set from socket name, cleared on CDP down
+	webView       *webViewManager
+	lastCDPScan   time.Time     // rate-limit ADB shell CDP scans
+	lastCDPResult *core.CDPInfo // cached result from last scan
+	knownCDPType  string        // "browser" or "webview" — set from socket name, cleared on CDP down
 }
 
 // New creates a new DeviceLab driver.
@@ -354,7 +354,8 @@ func (d *Driver) ensureWebViewConnection() {
 	// So we trust whatever socket the agent sends us.
 	if !d.webView.isConnected() {
 		logger.Info("[cdp:3-connection] CDP socket available, initiating connection to %s (type=%s)", cdpInfo.Socket, cdpType)
-		if err := d.webView.connect(cdpInfo, cdpType); err != nil {			logger.Info("[cdp:3-connection] connect failed: %v (socket=%s)", err, cdpInfo.Socket)
+		if err := d.webView.connect(cdpInfo, cdpType); err != nil {
+			logger.Info("[cdp:3-connection] connect failed: %v (socket=%s)", err, cdpInfo.Socket)
 			return
 		}
 	}
@@ -369,7 +370,8 @@ func (d *Driver) getCDPInfo() *core.CDPInfo {
 	if d.cdpStateFunc != nil {
 		if info := d.cdpStateFunc(); info != nil {
 			logger.Info("[cdp:2-source] detected via push event: socket=%s", info.Socket)
-			return info		}
+			return info
+		}
 	}
 
 	// Fallback: scan /proc/net/unix via ADB shell
@@ -439,19 +441,19 @@ func (d *Driver) scanCDPSocket() *core.CDPInfo {
 // knownBrowserPackages is the set of Android packages that are browsers.
 // Matches the on-device Java agent's browser detection logic.
 var knownBrowserPackages = map[string]bool{
-	"com.android.chrome":        true,
-	"com.chrome.beta":           true,
-	"com.chrome.dev":            true,
-	"com.chrome.canary":         true,
-	"org.chromium.chrome":       true,
-	"app.vanadium.browser":      true,
-	"org.mozilla.firefox":       true,
-	"org.mozilla.firefox_beta":  true,
-	"com.opera.browser":         true,
-	"com.opera.mini.native":     true,
-	"com.brave.browser":         true,
-	"com.microsoft.emmx":        true,
-	"com.vivaldi.browser":       true,
+	"com.android.chrome":           true,
+	"com.chrome.beta":              true,
+	"com.chrome.dev":               true,
+	"com.chrome.canary":            true,
+	"org.chromium.chrome":          true,
+	"app.vanadium.browser":         true,
+	"org.mozilla.firefox":          true,
+	"org.mozilla.firefox_beta":     true,
+	"com.opera.browser":            true,
+	"com.opera.mini.native":        true,
+	"com.brave.browser":            true,
+	"com.microsoft.emmx":           true,
+	"com.vivaldi.browser":          true,
 	"com.sec.android.app.sbrowser": true,
 }
 
@@ -474,6 +476,7 @@ func (d *Driver) isBrowserForeground() bool {
 	}
 	return false
 }
+
 // findFocused returns the currently focused element as a core.Element.
 // Tries Rod first (`:focus` selector), then native ActiveElement().
 func (d *Driver) findFocused() (core.Element, error) {
@@ -510,6 +513,7 @@ func (d *Driver) findFocused() (core.Element, error) {
 func (d *Driver) isBrowserMode() bool {
 	return d.knownCDPType == "browser"
 }
+
 // ============================================================================
 // Element Finding
 // ============================================================================
@@ -808,7 +812,8 @@ func (d *Driver) findElementOnce(sel flow.Selector) (*uiautomator2.Element, *cor
 
 	// Browser mode: skip all native strategies — all content is web
 	if d.isBrowserMode() {
-		return nil, nil, fmt.Errorf("element '%s' not found via CDP", sel.Describe())	}
+		return nil, nil, fmt.Errorf("element '%s' not found via CDP", sel.Describe())
+	}
 
 	// Handle relative selectors with single page source fetch
 	if sel.HasRelativeSelector() {
@@ -853,7 +858,7 @@ func (d *Driver) findElementOnce(sel flow.Selector) (*uiautomator2.Element, *cor
 }
 
 // findElementQuick finds an element without polling (single attempt).
-func (d *Driver) findElementQuick(sel flow.Selector, timeoutMs int) (*uiautomator2.Element, *core.ElementInfo, error) {
+func (d *Driver) findElementQuick(sel flow.Selector, _ int) (*uiautomator2.Element, *core.ElementInfo, error) {
 	return d.findElementOnce(sel)
 }
 
@@ -1291,7 +1296,7 @@ func buildSelectorsForTap(sel flow.Selector, timeoutMs int) ([]LocatorStrategy, 
 }
 
 // buildSelectorsWithOptions builds selectors with optional clickable-first prioritization.
-func buildSelectorsWithOptions(sel flow.Selector, timeoutMs int, preferClickable bool) ([]LocatorStrategy, error) {
+func buildSelectorsWithOptions(sel flow.Selector, _ int, preferClickable bool) ([]LocatorStrategy, error) {
 	var strategies []LocatorStrategy
 	stateFilters := buildStateFilters(sel)
 

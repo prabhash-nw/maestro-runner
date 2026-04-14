@@ -436,14 +436,14 @@ func (d *Driver) assertNotVisible(step *flow.AssertNotVisibleStep) *core.Command
 
 // Navigation
 
-func (d *Driver) back(step *flow.BackStep) *core.CommandResult {
+func (d *Driver) back(_ *flow.BackStep) *core.CommandResult {
 	if err := d.client.Back(); err != nil {
 		return errorResult(err, "Failed to press back")
 	}
 	return successResult("Pressed back", nil)
 }
 
-func (d *Driver) hideKeyboard(step *flow.HideKeyboardStep) *core.CommandResult {
+func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
 	if err := d.client.HideKeyboard(); err != nil {
 		// Don't fail - keyboard may not be visible
 		return successResult("Hide keyboard (may not have been visible)", nil)
@@ -614,7 +614,7 @@ func (d *Driver) copyTextFrom(step *flow.CopyTextFromStep) *core.CommandResult {
 	return result
 }
 
-func (d *Driver) pasteText(step *flow.PasteTextStep) *core.CommandResult {
+func (d *Driver) pasteText(_ *flow.PasteTextStep) *core.CommandResult {
 	text, err := d.client.GetClipboard()
 	if err != nil {
 		return errorResult(err, "Failed to get clipboard")
@@ -863,7 +863,7 @@ func screenshotDiffPercent(a, b image.Image) float64 {
 		return 1.0
 	}
 	var total float64
-	const max = 65535.0
+	const maxRGBA = 65535.0
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			ar, ag, abC, aa := a.At(ab.Min.X+x, ab.Min.Y+y).RGBA()
@@ -874,7 +874,7 @@ func screenshotDiffPercent(a, b image.Image) float64 {
 			total += math.Abs(float64(aa) - float64(ba))
 		}
 	}
-	return total / (float64(w*h) * 4.0 * max)
+	return total / (float64(w*h) * 4.0 * maxRGBA)
 }
 
 func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
@@ -969,7 +969,7 @@ func (d *Driver) inputRandom(step *flow.InputRandomStep) *core.CommandResult {
 	return result
 }
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to take screenshot: %v", err))

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"nhooyr.io/websocket"
+	"github.com/coder/websocket"
 )
 
 // mockServer creates an httptest.Server that upgrades to WebSocket

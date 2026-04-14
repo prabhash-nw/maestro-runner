@@ -13,7 +13,7 @@ import (
 // Returns ("", nil) if not a Flutter app.
 func DiscoverVMServiceIOS(udid string) (wsURL string, err error) {
 	// Query the unified log for recent Flutter VM Service announcements
-	cmd := exec.Command("xcrun", "simctl", "spawn", udid, "log", "show",
+	cmd := exec.Command("xcrun", "simctl", "spawn", udid, "log", "show", // #nosec G204 -- udid is a system-obtained iOS simulator identifier, not user input
 		"--last", "2m",
 		"--predicate", `eventMessage CONTAINS "Dart VM service is listening"`,
 		"--style", "compact",

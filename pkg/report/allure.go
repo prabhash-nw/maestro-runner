@@ -83,7 +83,7 @@ func GenerateAllure(reportDir string) error {
 	}
 
 	allureDir := filepath.Join(reportDir, "allure-results")
-	if err := os.MkdirAll(allureDir, 0o755); err != nil {
+	if err := os.MkdirAll(allureDir, 0o750); err != nil {
 		return fmt.Errorf("create allure-results dir: %w", err)
 	}
 
@@ -102,7 +102,7 @@ func GenerateAllure(reportDir string) error {
 		}
 
 		resultPath := filepath.Join(allureDir, entry.ID+"-result.json")
-		if err := os.WriteFile(resultPath, data, 0o644); err != nil {
+		if err := os.WriteFile(resultPath, data, 0o600); err != nil {
 			return fmt.Errorf("write allure result %s: %w", entry.ID, err)
 		}
 	}
@@ -118,15 +118,11 @@ func GenerateAllure(reportDir string) error {
 	}
 
 	// Write executor.json
-	if err := writeAllureExecutor(allureDir); err != nil {
-		return err
-	}
-
-	return nil
+	return writeAllureExecutor(allureDir)
 }
 
 // buildAllureResult builds an AllureResult from a flow entry and its detail.
-func buildAllureResult(entry *FlowEntry, detail *FlowDetail, index *Index, flowIndex int) AllureResult {
+func buildAllureResult(entry *FlowEntry, detail *FlowDetail, index *Index, _ int) AllureResult {
 	status := mapAllureStatus(entry.Status)
 
 	var startMs, stopMs int64
@@ -372,7 +368,7 @@ func writeAllureCategories(allureDir string) error {
 	}
 
 	path := filepath.Join(allureDir, "categories.json")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write categories.json: %w", err)
 	}
 
@@ -404,7 +400,7 @@ func writeAllureEnvironment(allureDir string, index *Index) error {
 	}
 
 	path := filepath.Join(allureDir, "environment.properties")
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("write environment.properties: %w", err)
 	}
 
@@ -426,7 +422,7 @@ func writeAllureExecutor(allureDir string) error {
 	}
 
 	path := filepath.Join(allureDir, "executor.json")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write executor.json: %w", err)
 	}
 

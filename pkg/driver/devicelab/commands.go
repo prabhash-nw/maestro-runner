@@ -310,8 +310,11 @@ func (d *Driver) assertNotVisible(step *flow.AssertNotVisibleStep) *core.Command
 	}
 
 	// Browser mode: use JS RAF-based polling (60fps in-browser, single CDP call).
+	// assertNotVisibleBrowser returns nil when the page is not connected — fall through to native.
 	if d.isBrowserMode() && d.webView != nil && d.webView.isConnected() {
-		return d.assertNotVisibleBrowser(step.Selector, timeout)
+		if result := d.assertNotVisibleBrowser(step.Selector, timeout); result != nil {
+			return result
+		}
 	}
 
 	deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
@@ -416,7 +419,6 @@ func (d *Driver) inputText(step *flow.InputTextStep) *core.CommandResult {
 
 		// First attempt
 		focused, err = d.findFocused()
-
 		// If initial attempt fails, retry with delays (handles numeric/special keyboards)
 		if err != nil {
 			retryDelays := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 300 * time.Millisecond, 500 * time.Millisecond}
@@ -592,7 +594,7 @@ func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
 	// Retry up to 3 times — the on-device agent tries KEYCODE_ESCAPE first
 	// (keyboard-only, no navigation side-effects), then falls back to KEYCODE_BACK.
 	for attempt := 0; attempt < 3; attempt++ {
-		d.client.HideKeyboard()
+		_ = d.client.HideKeyboard()
 
 		// Wait for keyboard to actually disappear (animation ~300ms).
 		deadline := time.Now().Add(500 * time.Millisecond)
@@ -1564,7 +1566,7 @@ func (d *Driver) openLink(step *flow.OpenLinkStep) *core.CommandResult {
 // Media Commands
 // ============================================================================
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to take screenshot: %v", err))
@@ -1669,11 +1671,17 @@ func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
 	}
 
 	// Browser mode: use JS RAF-based polling (60fps in-browser, single CDP call).
+	// Browser assert functions return nil when the page is not connected — fall through to native.
 	if d.isBrowserMode() && d.webView != nil && d.webView.isConnected() {
 		if waitingForVisible {
-			return d.assertVisibleBrowser(*selector, timeoutMs)
+			if result := d.assertVisibleBrowser(*selector, timeoutMs); result != nil {
+				return result
+			}
+		} else {
+			if result := d.assertNotVisibleBrowser(*selector, timeoutMs); result != nil {
+				return result
+			}
 		}
-		return d.assertNotVisibleBrowser(*selector, timeoutMs)
 	}
 
 	timeout := time.Duration(timeoutMs) * time.Millisecond
