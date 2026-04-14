@@ -1457,7 +1457,7 @@ func (d *Driver) openLink(step *flow.OpenLinkStep) *core.CommandResult {
 // Media Commands
 // ============================================================================
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to take screenshot: %v", err))
@@ -1745,7 +1745,7 @@ func screenshotDiffPercent(a, b image.Image) float64 {
 		return 1.0
 	}
 	var total float64
-	const max = 65535.0
+	const maxRGBA = 65535.0
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			ar, ag, abC, aa := a.At(ab.Min.X+x, ab.Min.Y+y).RGBA()
@@ -1756,7 +1756,7 @@ func screenshotDiffPercent(a, b image.Image) float64 {
 			total += math.Abs(float64(aa) - float64(ba))
 		}
 	}
-	return total / (float64(w*h) * 4.0 * max)
+	return total / (float64(w*h) * 4.0 * maxRGBA)
 }
 
 // ============================================================================

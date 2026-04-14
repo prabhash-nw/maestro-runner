@@ -14,15 +14,19 @@ type WebElement struct {
 	info *core.ElementInfo
 }
 
+// Info returns the cached element metadata.
 func (w *WebElement) Info() *core.ElementInfo { return w.info }
 
+// Text returns the visible text content of the element.
 func (w *WebElement) Text() (string, error) { return w.elem.Text() }
 
+// Input sets the element's value to the given text via Rod.
 func (w *WebElement) Input(text string) error { return w.elem.Input(text) }
 
 // Click performs a CDP click on the element (used for browser mode).
 func (w *WebElement) Click() error { return w.elem.Click(proto.InputMouseButtonLeft, 1) }
 
+// Clear clears the element's value via JavaScript event dispatch.
 func (w *WebElement) Clear() error {
 	_, err := w.elem.Eval(`() => { this.value = ''; this.dispatchEvent(new Event('input')); }`)
 	return err

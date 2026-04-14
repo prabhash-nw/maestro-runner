@@ -18,7 +18,7 @@ var reVMService = regexp.MustCompile(`The Dart VM service is listening on http:/
 // DiscoverVMService finds the Flutter VM Service from device logcat.
 // Sets up a Unix socket forward via socketPath and returns the VM service token.
 // Returns ("", nil) if no Flutter VM Service is found (not a Flutter app).
-func DiscoverVMService(dev DeviceExecutor, appID, socketPath string) (token string, err error) {
+func DiscoverVMService(dev DeviceExecutor, _ string, socketPath string) (token string, err error) {
 	// Read Flutter logcat entries
 	out, err := dev.Shell("logcat -d -s flutter")
 	if err != nil {

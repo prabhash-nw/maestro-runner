@@ -578,7 +578,7 @@ func (d *Driver) findElementOnce(sel flow.Selector) (*uiautomator2.Element, *cor
 
 // findElementQuick finds an element without polling (single attempt).
 // Deprecated: Use findElementOnce instead. Kept for backward compatibility.
-func (d *Driver) findElementQuick(sel flow.Selector, timeoutMs int) (*uiautomator2.Element, *core.ElementInfo, error) {
+func (d *Driver) findElementQuick(sel flow.Selector, _ int) (*uiautomator2.Element, *core.ElementInfo, error) {
 	return d.findElementOnce(sel)
 }
 
@@ -1067,7 +1067,7 @@ func buildSelectorsForTap(sel flow.Selector, timeoutMs int) ([]LocatorStrategy, 
 }
 
 // buildSelectorsWithOptions builds selectors with optional clickable-first prioritization.
-func buildSelectorsWithOptions(sel flow.Selector, timeoutMs int, preferClickable bool) ([]LocatorStrategy, error) {
+func buildSelectorsWithOptions(sel flow.Selector, _ int, preferClickable bool) ([]LocatorStrategy, error) {
 	var strategies []LocatorStrategy
 	stateFilters := buildStateFilters(sel)
 

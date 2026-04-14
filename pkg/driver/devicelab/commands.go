@@ -419,7 +419,6 @@ func (d *Driver) inputText(step *flow.InputTextStep) *core.CommandResult {
 
 		// First attempt
 		focused, err = d.findFocused()
-
 		// If initial attempt fails, retry with delays (handles numeric/special keyboards)
 		if err != nil {
 			retryDelays := []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 300 * time.Millisecond, 500 * time.Millisecond}
@@ -1567,7 +1566,7 @@ func (d *Driver) openLink(step *flow.OpenLinkStep) *core.CommandResult {
 // Media Commands
 // ============================================================================
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, fmt.Sprintf("Failed to take screenshot: %v", err))

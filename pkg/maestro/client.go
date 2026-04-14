@@ -99,7 +99,7 @@ func (c *Client) ConnectWithTimeout(timeout time.Duration) error {
 	if c.socketPath != "" {
 		httpClient := &http.Client{
 			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 					return net.Dial("unix", c.socketPath)
 				},
 			},

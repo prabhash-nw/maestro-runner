@@ -27,7 +27,7 @@ type Client struct {
 // NewClient creates a client using Unix socket (Linux/Mac).
 func NewClient(socketPath string) *Client {
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 			return net.Dial("unix", socketPath)
 		},
 	}

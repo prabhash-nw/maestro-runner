@@ -523,7 +523,7 @@ func (d *Driver) findElementOnce(sel flow.Selector) (*core.ElementInfo, error) {
 
 // findElementQuick finds an element without polling (single attempt).
 // Deprecated: Use findElementOnce instead.
-func (d *Driver) findElementQuick(sel flow.Selector, timeoutMs int) (*core.ElementInfo, error) {
+func (d *Driver) findElementQuick(sel flow.Selector, _ int) (*core.ElementInfo, error) {
 	return d.findElementOnce(sel)
 }
 
@@ -601,12 +601,12 @@ func (d *Driver) getElementInfo(elemID string) (*core.ElementInfo, error) {
 	}
 
 	var (
-		text      string
-		elemName  string
-		x, y, w, h int
-		displayed bool
+		text                               string
+		elemName                           string
+		x, y, w, h                         int
+		displayed                          bool
 		textErr, rectErr, dispErr, nameErr error
-		wg sync.WaitGroup
+		wg                                 sync.WaitGroup
 	)
 
 	wg.Add(4)

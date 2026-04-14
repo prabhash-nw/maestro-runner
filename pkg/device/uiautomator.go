@@ -254,7 +254,7 @@ func (d *AndroidDevice) checkHealth() bool {
 func checkHealthViaSocket(socketPath string) bool {
 	client := &http.Client{
 		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				return net.Dial("unix", socketPath)
 			},
 		},

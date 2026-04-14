@@ -661,7 +661,7 @@ func (d *Driver) SetFindTimeout(ms int) {
 }
 
 // SetWaitForIdleTimeout is a no-op for browser since Rod handles waits differently.
-func (d *Driver) SetWaitForIdleTimeout(ms int) error {
+func (d *Driver) SetWaitForIdleTimeout(_ int) error {
 	return nil
 }
 

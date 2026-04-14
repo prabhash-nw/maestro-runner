@@ -351,7 +351,7 @@ func (se *ScriptEngine) ExecuteAssertTrue(step *flow.AssertTrueStep) *core.Comma
 }
 
 // ExecuteAssertCondition handles assertCondition step.
-func (se *ScriptEngine) ExecuteAssertCondition(ctx context.Context, step *flow.AssertConditionStep, driver core.Driver) *core.CommandResult {
+func (se *ScriptEngine) ExecuteAssertCondition(_ context.Context, step *flow.AssertConditionStep, driver core.Driver) *core.CommandResult {
 	cond := step.Condition
 
 	// Check platform condition
@@ -420,7 +420,7 @@ func (se *ScriptEngine) ExecuteAssertCondition(ctx context.Context, step *flow.A
 }
 
 // CheckCondition evaluates a flow.Condition and returns true if met.
-func (se *ScriptEngine) CheckCondition(ctx context.Context, cond flow.Condition, driver core.Driver) bool {
+func (se *ScriptEngine) CheckCondition(_ context.Context, cond flow.Condition, driver core.Driver) bool {
 	// Check platform (first — no device call needed)
 	if cond.Platform != "" {
 		if info := driver.GetPlatformInfo(); info != nil {

@@ -318,7 +318,7 @@ func (d *Driver) eraseText(step *flow.EraseTextStep) *core.CommandResult {
 	return successResult(fmt.Sprintf("Erased %d characters", chars), nil)
 }
 
-func (d *Driver) hideKeyboard(step *flow.HideKeyboardStep) *core.CommandResult {
+func (d *Driver) hideKeyboard(_ *flow.HideKeyboardStep) *core.CommandResult {
 	// iOS: tap outside to dismiss keyboard, or press Done button
 	// Try pressing the "return" key (ignore error - keyboard might not be visible)
 	_ = d.client.SendKeys("\n", 0)
@@ -574,7 +574,7 @@ func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
 
 // Navigation commands
 
-func (d *Driver) back(step *flow.BackStep) *core.CommandResult {
+func (d *Driver) back(_ *flow.BackStep) *core.CommandResult {
 	// iOS doesn't have a hardware back button
 	// Could try to find a back button in the UI
 	return errorResult(fmt.Errorf("back not supported on iOS"), "iOS doesn't have a back button")
@@ -948,13 +948,13 @@ func (d *Driver) copyTextFrom(step *flow.CopyTextFromStep) *core.CommandResult {
 	}
 }
 
-func (d *Driver) pasteText(step *flow.PasteTextStep) *core.CommandResult {
+func (d *Driver) pasteText(_ *flow.PasteTextStep) *core.CommandResult {
 	// iOS: Need to use clipboard API via simctl or device APIs
 	// WDA doesn't directly support clipboard operations
 	return errorResult(fmt.Errorf("pasteText not supported via WDA"), "Paste requires clipboard access")
 }
 
-func (d *Driver) setClipboard(step *flow.SetClipboardStep) *core.CommandResult {
+func (d *Driver) setClipboard(_ *flow.SetClipboardStep) *core.CommandResult {
 	// iOS: WDA doesn't directly support clipboard operations
 	// For simulators, could use: xcrun simctl pbcopy <booted|udid>
 	// For real devices, would need a helper app
@@ -1264,7 +1264,7 @@ func screenshotDifferencePercent(a, b image.Image) float64 {
 
 // Media
 
-func (d *Driver) takeScreenshot(step *flow.TakeScreenshotStep) *core.CommandResult {
+func (d *Driver) takeScreenshot(_ *flow.TakeScreenshotStep) *core.CommandResult {
 	data, err := d.client.Screenshot()
 	if err != nil {
 		return errorResult(err, "Screenshot failed")

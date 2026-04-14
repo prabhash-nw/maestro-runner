@@ -118,15 +118,11 @@ func GenerateAllure(reportDir string) error {
 	}
 
 	// Write executor.json
-	if err := writeAllureExecutor(allureDir); err != nil {
-		return err
-	}
-
-	return nil
+	return writeAllureExecutor(allureDir)
 }
 
 // buildAllureResult builds an AllureResult from a flow entry and its detail.
-func buildAllureResult(entry *FlowEntry, detail *FlowDetail, index *Index, flowIndex int) AllureResult {
+func buildAllureResult(entry *FlowEntry, detail *FlowDetail, index *Index, _ int) AllureResult {
 	status := mapAllureStatus(entry.Status)
 
 	var startMs, stopMs int64

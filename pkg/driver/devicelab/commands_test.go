@@ -21,6 +21,7 @@ type mockDeviceLabClient struct {
 func (m *mockDeviceLabClient) FindElement(strategy, selector string) (*uiautomator2.Element, error) {
 	return nil, fmt.Errorf("element not found")
 }
+
 func (m *mockDeviceLabClient) FindAndClick(strategy, selector string) (*uiautomator2.Element, error) {
 	m.findClickCalls++
 	return nil, nil
@@ -34,23 +35,25 @@ func (m *mockDeviceLabClient) LongClick(x, y, durationMs int) error          { r
 func (m *mockDeviceLabClient) LongClickElement(elementID string, durationMs int) error {
 	return nil
 }
+
 func (m *mockDeviceLabClient) ScrollInArea(area uiautomator2.RectModel, direction string, percent float64, speed int) error {
 	m.scrollCalls++
 	return m.scrollErr
 }
+
 func (m *mockDeviceLabClient) SwipeInArea(area uiautomator2.RectModel, direction string, percent float64, speed int) error {
 	return nil
 }
-func (m *mockDeviceLabClient) Back() error                       { return nil }
-func (m *mockDeviceLabClient) HideKeyboard() error               { return nil }
-func (m *mockDeviceLabClient) PressKeyCode(keyCode int) error    { return nil }
-func (m *mockDeviceLabClient) SendKeyActions(text string) error  { return nil }
-func (m *mockDeviceLabClient) Screenshot() ([]byte, error)       { return nil, nil }
-func (m *mockDeviceLabClient) Source() (string, error)           { return m.sourceFunc() }
-func (m *mockDeviceLabClient) GetOrientation() (string, error)   { return "PORTRAIT", nil }
-func (m *mockDeviceLabClient) SetOrientation(string) error       { return nil }
-func (m *mockDeviceLabClient) GetClipboard() (string, error)     { return "", nil }
-func (m *mockDeviceLabClient) SetClipboard(string) error         { return nil }
+func (m *mockDeviceLabClient) Back() error                      { return nil }
+func (m *mockDeviceLabClient) HideKeyboard() error              { return nil }
+func (m *mockDeviceLabClient) PressKeyCode(keyCode int) error   { return nil }
+func (m *mockDeviceLabClient) SendKeyActions(text string) error { return nil }
+func (m *mockDeviceLabClient) Screenshot() ([]byte, error)      { return nil, nil }
+func (m *mockDeviceLabClient) Source() (string, error)          { return m.sourceFunc() }
+func (m *mockDeviceLabClient) GetOrientation() (string, error)  { return "PORTRAIT", nil }
+func (m *mockDeviceLabClient) SetOrientation(string) error      { return nil }
+func (m *mockDeviceLabClient) GetClipboard() (string, error)    { return "", nil }
+func (m *mockDeviceLabClient) SetClipboard(string) error        { return nil }
 func (m *mockDeviceLabClient) GetDeviceInfo() (*uiautomator2.DeviceInfo, error) {
 	return &uiautomator2.DeviceInfo{RealDisplaySize: "1080x2400"}, nil
 }

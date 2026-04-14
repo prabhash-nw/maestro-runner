@@ -1,3 +1,4 @@
+// Package logger provides structured file and console logging for maestro-runner.
 package logger
 
 import (

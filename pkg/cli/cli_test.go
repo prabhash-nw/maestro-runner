@@ -808,7 +808,7 @@ func TestIsSocketInUse_ActiveSocket(t *testing.T) {
 	defer func() { _ = os.Remove(socketPath) }()
 
 	// Write PID file for current process (simulates active owner)
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 	defer func() { _ = os.Remove(pidPath) }()
@@ -854,7 +854,7 @@ func TestIsSocketInUse_DeadOwner(t *testing.T) {
 	defer func() { _ = os.Remove(socketPath) }()
 
 	// Write PID file with a PID that doesn't exist (simulate dead owner)
-	if err := os.WriteFile(pidPath, []byte("99999999"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("99999999"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 	defer func() { _ = os.Remove(pidPath) }()
@@ -2209,7 +2209,7 @@ func TestIsSocketInUse_SocketFileExistsButNoPidFile(t *testing.T) {
 	socketPath := dir + "/test.sock"
 
 	// Create socket file (just a regular file to simulate existence)
-	if err := os.WriteFile(socketPath, []byte{}, 0644); err != nil {
+	if err := os.WriteFile(socketPath, []byte{}, 0o644); err != nil {
 		t.Fatalf("failed to create socket file: %v", err)
 	}
 
@@ -2225,12 +2225,12 @@ func TestIsSocketInUse_SocketAndPidWithLiveProcess(t *testing.T) {
 	pidPath := strings.TrimSuffix(socketPath, ".sock") + ".pid"
 
 	// Create socket file
-	if err := os.WriteFile(socketPath, []byte{}, 0644); err != nil {
+	if err := os.WriteFile(socketPath, []byte{}, 0o644); err != nil {
 		t.Fatalf("failed to create socket file: %v", err)
 	}
 
 	// Write current process PID
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -2246,12 +2246,12 @@ func TestIsSocketInUse_SocketAndPidWithDeadProcess(t *testing.T) {
 	pidPath := strings.TrimSuffix(socketPath, ".sock") + ".pid"
 
 	// Create socket file
-	if err := os.WriteFile(socketPath, []byte{}, 0644); err != nil {
+	if err := os.WriteFile(socketPath, []byte{}, 0o644); err != nil {
 		t.Fatalf("failed to create socket file: %v", err)
 	}
 
 	// Write dead PID
-	if err := os.WriteFile(pidPath, []byte("99999999"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("99999999"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 

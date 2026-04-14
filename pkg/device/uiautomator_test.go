@@ -80,7 +80,7 @@ func TestIsOwnerAlive_CurrentProcess(t *testing.T) {
 
 	// Write current process PID
 	pid := os.Getpid()
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestIsOwnerAlive_DeadProcess(t *testing.T) {
 
 	// Write a PID that almost certainly does not exist
 	// Use a very high PID number that is unlikely to be in use
-	if err := os.WriteFile(pidPath, []byte("99999999"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("99999999"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestIsOwnerAlive_InvalidPidContent(t *testing.T) {
 	pidPath := pidPathFor(socketPath)
 
 	// Write non-numeric content
-	if err := os.WriteFile(pidPath, []byte("not-a-pid"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("not-a-pid"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestIsOwnerAlive_EmptyPidFile(t *testing.T) {
 	pidPath := pidPathFor(socketPath)
 
 	// Write empty file
-	if err := os.WriteFile(pidPath, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte(""), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -146,7 +146,7 @@ func TestIsOwnerAlive_PidWithWhitespace(t *testing.T) {
 
 	// Write PID with leading/trailing whitespace and newline
 	pid := os.Getpid()
-	if err := os.WriteFile(pidPath, []byte("  "+strconv.Itoa(pid)+"\n"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("  "+strconv.Itoa(pid)+"\n"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -162,7 +162,7 @@ func TestIsOwnerAlive_NegativePid(t *testing.T) {
 	pidPath := pidPathFor(socketPath)
 
 	// Write negative PID
-	if err := os.WriteFile(pidPath, []byte("-1"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("-1"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestIsOwnerAlive_ZeroPid(t *testing.T) {
 	pidPath := pidPathFor(socketPath)
 
 	// Write PID 0
-	if err := os.WriteFile(pidPath, []byte("0"), 0644); err != nil {
+	if err := os.WriteFile(pidPath, []byte("0"), 0o644); err != nil {
 		t.Fatalf("failed to write PID file: %v", err)
 	}
 
@@ -204,7 +204,7 @@ func TestFindAPK_NoMatch(t *testing.T) {
 func TestFindAPK_MatchesFile(t *testing.T) {
 	dir := t.TempDir()
 	apkPath := filepath.Join(dir, "test-v1.0.apk")
-	if err := os.WriteFile(apkPath, []byte("fake apk"), 0644); err != nil {
+	if err := os.WriteFile(apkPath, []byte("fake apk"), 0o644); err != nil {
 		t.Fatalf("failed to create test APK: %v", err)
 	}
 

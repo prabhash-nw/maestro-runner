@@ -35,8 +35,10 @@ import (
 
 // activeCleanup holds the current driver cleanup function so the signal handler
 // can clean up resources (sockets, adb forwards, sessions) before os.Exit.
-var activeCleanup func()
-var cleanupMu sync.Mutex
+var (
+	activeCleanup func()
+	cleanupMu     sync.Mutex
+)
 
 var testCommand = &cli.Command{
 	Name:      "test",
@@ -1388,7 +1390,7 @@ func onFlowStart(flowIdx, totalFlows int, name, file string) {
 	fmt.Println(strings.Repeat("─", 60))
 }
 
-func onStepComplete(idx int, desc string, passed bool, durationMs int64, errMsg string) {
+func onStepComplete(_ int, desc string, passed bool, durationMs int64, errMsg string) {
 	// Don't mark runFlow/repeat/retry as slow - they contain multiple steps
 	isCompoundStep := strings.HasPrefix(desc, "runFlow:") ||
 		strings.HasPrefix(desc, "repeat:") ||
@@ -1446,7 +1448,7 @@ func onNestedStep(depth int, desc string, passed bool, durationMs int64, errMsg 
 	}
 }
 
-func onFlowEnd(name string, passed bool, durationMs int64, errMsg string) {
+func onFlowEnd(name string, passed bool, durationMs int64, _ string) {
 	if passed {
 		fmt.Printf("%s✓ %s%s %s%s%s\n",
 			color(colorGreen), color(colorReset), name, color(colorGray), formatDuration(durationMs), color(colorReset))
@@ -1861,7 +1863,7 @@ func checkDeviceAvailable(deviceID, platform string) error {
 
 // enhanceNoDevicesError enhances error suggestions with actual command context.
 // Emulator flags are global flags, so they must appear before the "test" subcommand.
-func enhanceNoDevicesError(noDevErr *device.NoDevicesError, cfg *RunConfig) {
+func enhanceNoDevicesError(noDevErr *device.NoDevicesError, _ *RunConfig) {
 	// Split os.Args into: binary + global flags vs "test" subcommand + its args.
 	// Example: maestro-runner --platform android test flow.yaml
 	//   → globalPart = "maestro-runner --platform android"

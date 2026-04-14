@@ -4375,7 +4375,7 @@ func TestRunBrowserScript(t *testing.T) {
 	// Create a temp JS file
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test-script.js")
-	os.WriteFile(scriptPath, []byte(`return document.title;`), 0644)
+	os.WriteFile(scriptPath, []byte(`return document.title;`), 0o644)
 
 	result := d.runBrowserScript(&flow.RunBrowserScriptStep{
 		File: scriptPath,
@@ -4397,7 +4397,7 @@ func TestRunBrowserScriptWithEnv(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "env-script.js")
-	os.WriteFile(scriptPath, []byte(`return window.__env.API_KEY;`), 0644)
+	os.WriteFile(scriptPath, []byte(`return window.__env.API_KEY;`), 0o644)
 
 	result := d.runBrowserScript(&flow.RunBrowserScriptStep{
 		File: scriptPath,

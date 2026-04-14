@@ -1,3 +1,4 @@
+// Package emulator manages Android emulator lifecycle via the emulator binary.
 package emulator
 
 import (

@@ -51,7 +51,7 @@ func (d *AndroidDevice) StartDeviceLabDriver(cfg DeviceLabDriverConfig) error {
 	}
 
 	// Pre-flight: check for conflicting UiAutomation holders (e.g. Appium)
-	if err := d.checkUiAutomationConflict(); err != nil {
+	if err := d.checkUIAutomationConflict(); err != nil {
 		return err
 	}
 
@@ -112,7 +112,7 @@ func (d *AndroidDevice) StartDeviceLabDriver(cfg DeviceLabDriverConfig) error {
 // with "UiAutomationService already registered".
 // This stops all known instrumentation holders (Appium, Maestro, etc.) and also
 // kills any active instrumentation reported by the system.
-func (d *AndroidDevice) checkUiAutomationConflict() error {
+func (d *AndroidDevice) checkUIAutomationConflict() error {
 	// Known packages that hold UiAutomation connections
 	knownConflicts := []string{
 		"io.appium.uiautomator2.server",
@@ -294,7 +294,7 @@ func (d *AndroidDevice) DeviceLabDriverSocket() string {
 	return d.driverSocketPath
 }
 
-// DeviceLabDriverPort returns the current DeviceLab Android Driver TCP port.
+// DeviceLabDriverLocalPort returns the current DeviceLab Android Driver TCP port.
 func (d *AndroidDevice) DeviceLabDriverLocalPort() int {
 	return d.driverLocalPort
 }

@@ -1,3 +1,4 @@
+// Package simulator manages iOS simulator lifecycle via xcrun simctl.
 package simulator
 
 import (
