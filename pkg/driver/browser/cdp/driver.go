@@ -218,7 +218,7 @@ func (d *Driver) startDialogHandler() {
 // and breach detection popups. Must be called before Launch().
 func writeChromePref(userDataDir string) {
 	defaultDir := filepath.Join(userDataDir, "Default")
-	if err := os.MkdirAll(defaultDir, 0o755); err != nil {
+	if err := os.MkdirAll(defaultDir, 0o750); err != nil {
 		return
 	}
 	prefs := `{
@@ -231,7 +231,7 @@ func writeChromePref(userDataDir string) {
     "leak_detection": false
   }
 }`
-	_ = os.WriteFile(filepath.Join(defaultDir, "Preferences"), []byte(prefs), 0o644)
+	_ = os.WriteFile(filepath.Join(defaultDir, "Preferences"), []byte(prefs), 0o600)
 }
 
 // detectChrome returns the path to an installed Chrome/Chromium binary, or empty string.

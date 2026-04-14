@@ -162,7 +162,7 @@ func listAvailableAVDs() []string {
 	}
 
 	// Run emulator -list-avds
-	cmd := exec.Command(emulatorPath, "-list-avds")
+	cmd := exec.Command(emulatorPath, "-list-avds") // #nosec G204 -- emulatorPath is resolved from Android SDK, not user input
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -362,7 +362,7 @@ func (d *AndroidDevice) adb(args ...string) (string, error) {
 	}
 	cmdArgs = append(cmdArgs, args...)
 
-	cmd := exec.Command(d.adbPath, cmdArgs...)
+	cmd := exec.Command(d.adbPath, cmdArgs...) // #nosec G204 -- adbPath is resolved from Android SDK, cmdArgs are ADB commands with system-obtained device serials
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

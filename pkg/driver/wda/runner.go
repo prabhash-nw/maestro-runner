@@ -88,10 +88,10 @@ func (r *Runner) Build(ctx context.Context) error {
 		return fmt.Errorf("failed to get build cache directory: %w", err)
 	}
 
-	if err := os.MkdirAll(r.buildDir, 0o755); err != nil {
+	if err := os.MkdirAll(r.buildDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create build directory: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(r.buildDir, "logs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(r.buildDir, "logs"), 0o750); err != nil {
 		return fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
@@ -136,7 +136,7 @@ func (r *Runner) Build(ctx context.Context) error {
 	if r.wdaBundleID != "" {
 		args = append(args, fmt.Sprintf("PRODUCT_BUNDLE_IDENTIFIER=%s", r.wdaBundleID))
 	}
-	cmd := exec.CommandContext(buildCtx, "xcodebuild", args...)
+	cmd := exec.CommandContext(buildCtx, "xcodebuild", args...) // #nosec G204 -- args contain xcodebuild flags with system-resolved paths and SDK settings, not user input
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
@@ -175,7 +175,7 @@ func (r *Runner) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
 
-	r.cmd = exec.CommandContext(ctx, "xcodebuild",
+	r.cmd = exec.CommandContext(ctx, "xcodebuild", // #nosec G204 -- xctestrun path and destination are system-resolved values from WDA build, not user input
 		"test-without-building",
 		"-xctestrun", xctestrun,
 		"-destination", r.destination(),
@@ -232,7 +232,7 @@ func (r *Runner) injectPort(xctestrunPath string) error {
 	portStr := strconv.Itoa(int(r.port))
 
 	// Convert plist to JSON for easy manipulation
-	jsonData, err := exec.Command("plutil", "-convert", "json", "-o", "-", xctestrunPath).Output()
+	jsonData, err := exec.Command("plutil", "-convert", "json", "-o", "-", xctestrunPath).Output() // #nosec G204 -- xctestrunPath is a system-resolved file path, not user input
 	if err != nil {
 		return fmt.Errorf("failed to read xctestrun: %w", err)
 	}
@@ -269,12 +269,12 @@ func (r *Runner) injectPort(xctestrunPath string) error {
 		return fmt.Errorf("failed to serialize xctestrun: %w", err)
 	}
 
-	if err := os.WriteFile(xctestrunPath, result, 0o644); err != nil {
+	if err := os.WriteFile(xctestrunPath, result, 0o600); err != nil {
 		return fmt.Errorf("failed to write xctestrun: %w", err)
 	}
 
 	// Convert back to XML plist format
-	if out, err := exec.Command("plutil", "-convert", "xml1", xctestrunPath).CombinedOutput(); err != nil {
+	if out, err := exec.Command("plutil", "-convert", "xml1", xctestrunPath).CombinedOutput(); err != nil { // #nosec G204 -- xctestrunPath is a system-resolved file path, not user input
 		return fmt.Errorf("failed to convert xctestrun to plist: %s: %w", out, err)
 	}
 

@@ -19,7 +19,7 @@ func GenerateJUnit(reportDir string) error {
 	xml := buildJUnitXML(index, flows)
 
 	outputPath := filepath.Join(reportDir, "junit-report.xml")
-	if err := os.WriteFile(outputPath, []byte(xml), 0o644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(xml), 0o600); err != nil {
 		return fmt.Errorf("write junit xml: %w", err)
 	}
 

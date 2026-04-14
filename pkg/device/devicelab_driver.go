@@ -206,7 +206,7 @@ func (d *AndroidDevice) setupDeviceLabSocketForward(cfg DeviceLabDriverConfig) e
 	d.driverSocketPath = socketPath
 
 	// Write PID file
-	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		logger.Warn("failed to write DeviceLab Android Driver PID file: %v", err)
 	}
 

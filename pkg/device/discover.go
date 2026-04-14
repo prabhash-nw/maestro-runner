@@ -20,7 +20,7 @@ func ListDevices() ([]ConnectedDevice, error) {
 		return nil, err
 	}
 
-	cmd := exec.Command(adbPath, "devices")
+	cmd := exec.Command(adbPath, "devices") // #nosec G204 -- adbPath is resolved from Android SDK, not user input
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 

@@ -126,7 +126,7 @@ func (d *AndroidDevice) setupSocketForward(cfg UIAutomator2Config) error {
 	d.socketPath = socketPath
 
 	// Write PID file so other instances can detect us as the owner
-	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+	if err := os.WriteFile(pidPathFor(socketPath), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		logger.Warn("failed to write PID file: %v", err)
 	}
 

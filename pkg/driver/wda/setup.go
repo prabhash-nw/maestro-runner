@@ -126,7 +126,7 @@ func DownloadWDA(version string) error {
 
 	// Download
 	fmt.Printf("Downloading WebDriverAgent v%s...\n", version)
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is constructed from the hardcoded WDARepoURL constant with a version string, not user input
 	if err != nil {
 		_ = tmpFile.Close()
 		return fmt.Errorf("download failed: %w", err)
@@ -153,7 +153,7 @@ func DownloadWDA(version string) error {
 
 	// Create destination directory
 	baseDir := filepath.Dir(wdaPath)
-	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+	if err := os.MkdirAll(baseDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -197,13 +197,13 @@ func unzip(src, dest string) error {
 		}
 
 		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0o755); err != nil {
+			if err := os.MkdirAll(target, 0o750); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return err
 		}
 

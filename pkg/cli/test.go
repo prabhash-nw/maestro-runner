@@ -691,7 +691,7 @@ func resolveOutputDir(output string, flatten bool) (string, error) {
 
 func executeTest(cfg *RunConfig) error {
 	// 1. Create output directory
-	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.OutputDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -1806,7 +1806,7 @@ func createAppiumDriver(cfg *RunConfig) (core.Driver, func(), error) {
 
 // runCommand runs a command and returns stdout.
 func runCommand(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) // #nosec G204 -- name and args are internal CLI helper invocations with system-resolved tool names, not user-controlled shell input
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -1847,7 +1847,7 @@ func checkDeviceAvailable(deviceID, platform string) error {
 		}
 
 		// Also verify device is connected via adb
-		cmd := exec.Command("adb", "-s", deviceID, "get-state")
+		cmd := exec.Command("adb", "-s", deviceID, "get-state") // #nosec G204 -- deviceID is a system-obtained ADB device serial, not user input
 		output, err := cmd.Output()
 		if err != nil {
 			return fmt.Errorf("device not found or not connected")
