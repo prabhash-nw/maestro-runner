@@ -43,12 +43,18 @@ func (d *Driver) tapOn(step *flow.TapOnStep) *core.CommandResult {
 			return d.tapOnBrowser(step)
 		}
 
-		strategies, err := buildSelectors(step.Selector, 0)
+		// Clickable-first: prefer buttons over labels. The agent promotes a text
+		// match to its nearest clickable ancestor when .clickable(true) is set,
+		// so "tapOn: SIGN IN" hits the clickable login-button ViewGroup even
+		// when the text lives on a non-clickable TextView child.
+		clickableStrategies, _ := buildClickableOnlyStrategies(step.Selector)
+		allStrategies, err := buildSelectors(step.Selector, 0)
 		if err != nil {
 			return errorResult(err, fmt.Sprintf("Failed to build selectors: %v", err))
 		}
+		strategies := append(clickableStrategies, allStrategies...)
 		timeout := d.calculateTimeout(step.IsOptional(), step.TimeoutMs)
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(d.parentContext(), timeout)
 		defer cancel()
 
 		var lastErr error
@@ -739,37 +745,11 @@ func (d *Driver) swipe(step *flow.SwipeStep) *core.CommandResult {
 		}
 	}
 
+	// No selector — use screen coordinates directly (matches Maestro behavior)
 	width, height, err := d.screenSize()
 	if err != nil {
 		return errorResult(err, "Failed to get screen size")
 	}
-
-	scrollableInfo, scrollableCount := d.findScrollableElement(10000)
-
-	if scrollableInfo != nil {
-		b := scrollableInfo.Bounds
-		fmt.Printf("[swipe] Found %d scrollable(s), using: bounds=[%d,%d,%d,%d]\n",
-			scrollableCount, b.X, b.Y, b.Width, b.Height)
-
-		centerX := b.X + b.Width/2
-		var startY, endY int
-		switch direction {
-		case "up":
-			startY = b.Y + b.Height*70/100
-			endY = b.Y + b.Height*30/100
-		case "down":
-			startY = b.Y + b.Height*30/100
-			endY = b.Y + b.Height*70/100
-		default:
-			startY = b.Y + b.Height*70/100
-			endY = b.Y + b.Height*30/100
-		}
-
-		fmt.Printf("[swipe] Coords in scrollable: (%d,%d) → (%d,%d)\n", centerX, startY, centerX, endY)
-		return d.swipeWithAbsoluteCoords(centerX, startY, centerX, endY, step.Duration)
-	}
-
-	fmt.Printf("[swipe] No scrollable found, using screen coordinates (50%% center)\n")
 	return d.swipeWithMaestroCoordinates(direction, width, height, step.Duration)
 }
 
@@ -1677,7 +1657,7 @@ func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
 	}
 
 	timeout := time.Duration(timeoutMs) * time.Millisecond
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(d.parentContext(), timeout)
 	defer cancel()
 
 	for {
