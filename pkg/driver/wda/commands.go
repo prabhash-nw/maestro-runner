@@ -341,7 +341,7 @@ func (d *Driver) waitForAlert(timeoutMs int, accept bool) *core.CommandResult {
 		timeoutMs = 5000
 	}
 	timeout := time.Duration(timeoutMs) * time.Millisecond
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(d.parentContext(), timeout)
 	defer cancel()
 
 	action := "accept"
@@ -1064,7 +1064,7 @@ func (d *Driver) waitUntil(step *flow.WaitUntilStep) *core.CommandResult {
 	}
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(d.parentContext(), timeout)
 	defer cancel()
 
 	// Determine selector for error messages
