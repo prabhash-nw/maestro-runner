@@ -11,7 +11,8 @@ set -euo pipefail
 #
 # Explicit exclusions:
 # - Go Chrome CDP tests are skipped by excluding pkg/driver/browser/cdp.
-# - Python real-device tests are skipped by running only tests/test_client.py and tests/test_models.py.
+# - Python device-dependent tests are skipped by running pytest with --noconftest
+#   against only tests/test_client.py and tests/test_models.py.
 # - TypeScript real-device tests are skipped by running npm run test:unit.
 
 ROOT_DIR="$(git rev-parse --show-toplevel)"
@@ -79,9 +80,9 @@ fi
 
 if [[ "$HAS_PYTHON_CHANGES" -eq 1 || "$HAS_GO_CHANGES" -eq 1 ]]; then
   if [[ "$HAS_GO_CHANGES" -eq 1 && "$HAS_PYTHON_CHANGES" -eq 0 ]]; then
-    echo "[pre-push] Go changes detected. Running Python unit tests as part of cross-client validation (client/python/tests/test_client.py, test_models.py)..."
+    echo "[pre-push] Go changes detected. Running Python non-device unit tests as part of cross-client validation (client/python/tests/test_client.py, test_models.py)..."
   else
-    echo "[pre-push] Python changes detected. Running Python unit tests (client/python/tests/test_client.py, test_models.py)..."
+    echo "[pre-push] Python changes detected. Running Python non-device unit tests (client/python/tests/test_client.py, test_models.py)..."
   fi
   if [[ ! -x "client/python/.venv/bin/pytest" ]]; then
     echo "[pre-push] Missing client/python/.venv/bin/pytest"
@@ -90,7 +91,7 @@ if [[ "$HAS_PYTHON_CHANGES" -eq 1 || "$HAS_GO_CHANGES" -eq 1 ]]; then
   fi
   (
     cd client/python
-    .venv/bin/pytest tests/test_client.py tests/test_models.py -q
+    .venv/bin/pytest --noconftest tests/test_client.py tests/test_models.py -q
   )
 else
   echo "[pre-push] No Python changes detected. Skipping Python unit tests."

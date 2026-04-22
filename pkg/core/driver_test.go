@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -237,8 +238,8 @@ func TestHasNonASCII(t *testing.T) {
 		{"Hello World 123!", false},
 		{"", false},
 		{"abc\t\n", false},
-		{"\x7f", false},  // DEL is ASCII (127)
-		{"\x80", true},   // first non-ASCII byte
+		{"\x7f", false},      // DEL is ASCII (127)
+		{"\x80", true},       // first non-ASCII byte
 		{"cafe\u0301", true}, // e with combining accent
 		{"hello world", false},
 	}
@@ -317,27 +318,29 @@ func TestBounds_CenterInside(t *testing.T) {
 // stubDriver is a minimal Driver for testing Unwrap.
 type stubDriver struct{}
 
-func (s *stubDriver) Execute(step flow.Step) *CommandResult  { return nil }
-func (s *stubDriver) Screenshot() ([]byte, error)            { return nil, nil }
-func (s *stubDriver) Hierarchy() ([]byte, error)             { return nil, nil }
-func (s *stubDriver) GetState() *StateSnapshot               { return nil }
-func (s *stubDriver) GetPlatformInfo() *PlatformInfo         { return nil }
-func (s *stubDriver) SetFindTimeout(ms int)                  {}
-func (s *stubDriver) SetWaitForIdleTimeout(ms int) error     { return nil }
+func (s *stubDriver) Execute(step flow.Step) *CommandResult { return nil }
+func (s *stubDriver) Screenshot() ([]byte, error)           { return nil, nil }
+func (s *stubDriver) Hierarchy() ([]byte, error)            { return nil, nil }
+func (s *stubDriver) GetState() *StateSnapshot              { return nil }
+func (s *stubDriver) GetPlatformInfo() *PlatformInfo        { return nil }
+func (s *stubDriver) SetFindTimeout(ms int)                 {}
+func (s *stubDriver) SetWaitForIdleTimeout(ms int) error    { return nil }
+func (s *stubDriver) SetContext(ctx context.Context)        {}
 
 // wrappingDriver wraps another driver and implements Inner().
 type wrappingDriver struct {
 	inner Driver
 }
 
-func (w *wrappingDriver) Execute(step flow.Step) *CommandResult  { return nil }
-func (w *wrappingDriver) Screenshot() ([]byte, error)            { return nil, nil }
-func (w *wrappingDriver) Hierarchy() ([]byte, error)             { return nil, nil }
-func (w *wrappingDriver) GetState() *StateSnapshot               { return nil }
-func (w *wrappingDriver) GetPlatformInfo() *PlatformInfo         { return nil }
-func (w *wrappingDriver) SetFindTimeout(ms int)                  {}
-func (w *wrappingDriver) SetWaitForIdleTimeout(ms int) error     { return nil }
-func (w *wrappingDriver) Inner() Driver                          { return w.inner }
+func (w *wrappingDriver) Execute(step flow.Step) *CommandResult { return nil }
+func (w *wrappingDriver) Screenshot() ([]byte, error)           { return nil, nil }
+func (w *wrappingDriver) Hierarchy() ([]byte, error)            { return nil, nil }
+func (w *wrappingDriver) GetState() *StateSnapshot              { return nil }
+func (w *wrappingDriver) GetPlatformInfo() *PlatformInfo        { return nil }
+func (w *wrappingDriver) SetFindTimeout(ms int)                 {}
+func (w *wrappingDriver) SetWaitForIdleTimeout(ms int) error    { return nil }
+func (w *wrappingDriver) SetContext(ctx context.Context)        {}
+func (w *wrappingDriver) Inner() Driver                         { return w.inner }
 
 func TestUnwrap_NoWrapper(t *testing.T) {
 	d := &stubDriver{}
