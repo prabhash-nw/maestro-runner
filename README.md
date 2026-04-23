@@ -15,7 +15,7 @@
 [![license](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 [![by](https://img.shields.io/badge/by-DeviceLab.dev-17a2b8.svg?style=for-the-badge)](https://devicelab.dev)
 
-[![CI](https://github.com/devicelab-dev/maestro-runner/actions/workflows/ci.yml/badge.svg)](https://github.com/devicelab-dev/maestro-runner/actions/workflows/ci.yml)
+[![Unit Tests](https://github.com/devicelab-dev/maestro-runner/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/devicelab-dev/maestro-runner/actions/workflows/unit-tests.yml)
 [![codecov](https://codecov.io/gh/devicelab-dev/maestro-runner/branch/main/graph/badge.svg)](https://codecov.io/gh/devicelab-dev/maestro-runner)
 [![Go Report Card](https://goreportcard.com/badge/github.com/devicelab-dev/maestro-runner?v=2)](https://goreportcard.com/report/github.com/devicelab-dev/maestro-runner)
 

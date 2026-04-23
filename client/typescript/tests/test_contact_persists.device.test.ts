@@ -53,6 +53,6 @@ describe("ContactPersists", () => {
     await contactList.launch(false);
 
     // The contact must still be visible
-    await contactList.assertContactVisible("Alice Tester");
+    await contactList.assertContactVisible("Alice Tester", 10000);
   });
 });

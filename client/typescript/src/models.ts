@@ -4,6 +4,7 @@
 
 export interface ElementSelectorInit {
   text?: string;
+  textRegex?: string;
   id?: string;
   index?: number;
   enabled?: boolean;
@@ -23,6 +24,7 @@ export interface ElementSelectorInit {
 
 export class ElementSelector {
   text?: string;
+  textRegex?: string;
   id?: string;
   index?: number;
   enabled?: boolean;
@@ -54,6 +56,7 @@ export class ElementSelector {
   toDict(): Record<string, unknown> {
     const d: Record<string, unknown> = {};
     if (this.text != null) d.text = this.text;
+    if (this.textRegex != null) d.textRegex = this.textRegex;
     if (this.id != null) d.id = this.id;
     if (this.index != null) d.index = String(this.index);
     if (this.enabled != null) d.enabled = this.enabled;

@@ -18,6 +18,7 @@ class ElementSelector:
     focused: bool | None = None
     selected: bool | None = None
     css: str | None = None
+    text_regex: str | None = None
     traits: str | None = None
     child_of: ElementSelector | None = None
     below: ElementSelector | None = None
@@ -46,6 +47,8 @@ class ElementSelector:
             d["selected"] = self.selected
         if self.css is not None:
             d["css"] = self.css
+        if self.text_regex is not None:
+            d["textRegex"] = self.text_regex
         if self.traits is not None:
             d["traits"] = self.traits
         if self.child_of is not None:

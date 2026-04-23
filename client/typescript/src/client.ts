@@ -88,7 +88,10 @@ export class MaestroClient {
   private async exec(step: Step): Promise<ExecutionResult> {
     const result = await this.executeStep(step);
     if (!result.success && !step.optional) {
-      throw new StepError(result.message ?? "step failed");
+      const reason = result.message ?? "step failed";
+      throw new StepError(
+        `Step failed (${this.describeStep(step)}): ${reason}\nstep=${this.safeStringify(step)}`,
+      );
     }
     return result;
   }
@@ -219,16 +222,39 @@ export class MaestroClient {
 
   async assertVisible(opts: {
     text?: string;
+    textPattern?: string;
     id?: string;
     selector?: ElementSelector;
     timeoutMs?: number;
     label?: string;
   }): Promise<ExecutionResult> {
-    return this.exec(commands.assertVisible(opts));
+    if (opts.selector) {
+      return this.exec(commands.assertVisible({
+        selector: opts.selector,
+        timeoutMs: opts.timeoutMs,
+        label: opts.label,
+      }));
+    }
+
+    if (opts.textPattern) {
+      return this.exec(commands.assertVisible({
+        textPattern: opts.textPattern,
+        timeoutMs: opts.timeoutMs,
+        label: opts.label,
+      }));
+    }
+
+    return this.exec(commands.assertVisible({
+      text: opts.text,
+      id: opts.id,
+      timeoutMs: opts.timeoutMs,
+      label: opts.label,
+    }));
   }
 
   async assertNotVisible(opts: {
     text?: string;
+    textPattern?: string;
     id?: string;
     selector?: ElementSelector;
     timeoutMs?: number;
@@ -237,7 +263,7 @@ export class MaestroClient {
     return this.exec(commands.assertNotVisible(opts));
   }
 
-  async elementExists(opts: { text?: string; id?: string }): Promise<boolean> {
+  async elementExists(opts: { text?: string; textPattern?: string; id?: string }): Promise<boolean> {
     const step = commands.assertVisible({ ...opts, optional: true });
     const result = await this.executeStep(step);
     return result.success;
@@ -317,5 +343,24 @@ export class MaestroClient {
       headers: { ...headers, ...(init?.headers as Record<string, string>) },
       signal: AbortSignal.timeout(this.timeout),
     });
+  }
+
+  private describeStep(step: Step): string {
+    const type = typeof step.type === "string" ? step.type : "unknown";
+    const label = typeof step.label === "string" ? ` label=${JSON.stringify(step.label)}` : "";
+    const selector = step.selector !== undefined
+      ? ` selector=${this.safeStringify(step.selector)}`
+      : "";
+    const text = typeof step.text === "string" ? ` text=${JSON.stringify(step.text)}` : "";
+    const id = typeof step.id === "string" ? ` id=${JSON.stringify(step.id)}` : "";
+    return `type=${type}${label}${selector}${text}${id}`;
+  }
+
+  private safeStringify(value: unknown): string {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "<unserializable>";
+    }
   }
 }

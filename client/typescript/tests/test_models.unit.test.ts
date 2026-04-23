@@ -8,6 +8,11 @@ describe("ElementSelector.toDict", () => {
     expect(sel.toDict()).toEqual({ text: "Hello" });
   });
 
+  it("serializes textRegex only", () => {
+    const sel = new ElementSelector({ textRegex: ".*Alice.*Tester.*" });
+    expect(sel.toDict()).toEqual({ textRegex: ".*Alice.*Tester.*" });
+  });
+
   it("serializes id only", () => {
     const sel = new ElementSelector({ id: "btn_login" });
     expect(sel.toDict()).toEqual({ id: "btn_login" });
